@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
-import { getSupabaseAdmin } from '@/app/lib/supabaseAdmin'
-import { prisma } from '@/app/lib/prisma'
-import { auth } from '@/app/lib/auth'
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
+import { prisma } from '@/lib/prisma'
+import { auth } from '@/lib/auth'
 
 export async function POST(req: Request) {
   const session = await auth()

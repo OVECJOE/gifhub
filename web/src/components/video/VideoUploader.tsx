@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useRef, useState } from 'react'
-import { GlassCard } from '@/app/components/ui/GlassCard'
+import { GlassCard } from '@/components/ui/GlassCard'
 
 type Props = {
   onVideoSelect: (file: File) => void

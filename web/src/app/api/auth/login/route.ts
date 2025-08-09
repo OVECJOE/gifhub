@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { signIn } from '@/app/lib/auth'
+import { signIn } from '@/lib/auth'
 
 const LoginSchema = z.object({ email: z.string().email(), password: z.string().min(1) })
 

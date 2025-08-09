@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { signOut } from '@/app/lib/auth'
+import { signOut } from '@/lib/auth'
 
 export async function POST() {
   try {
