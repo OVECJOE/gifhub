@@ -39,7 +39,7 @@ export default function LoginPage() {
           <div className="flex flex-col gap-3">
             <Button type="submit" disabled={isSubmitting}>Login</Button>
             <Separator />
-            <Button type="button" variant="secondary" onClick={() => signIn('google')}>Login with Google</Button>
+            <Button type="button" variant="secondary" onClick={() => signIn('google', { redirectTo: '/dashboard' })}>Login with Google</Button>
           </div>
         </form>
       </GlassCard>
