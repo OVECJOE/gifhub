@@ -43,11 +43,10 @@ export async function POST(req: Request) {
   const repo = await prisma.repository.create({ 
     data: { 
       name: body.name, 
-      description: body.description, 
+      description: body.description,
+      isPublic: body.isPublic,
       userId 
     } 
   })
   return NextResponse.json({ repository: repo }, { status: 201 })
 }
-
-
