@@ -131,10 +131,10 @@ export default function RepositoryDetailsPage({ params }: { params: Promise<{ id
       </div>
 
       {/* Repository Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col md:flex-row items-start justify-between">
         <div className="flex-1">
           <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-2xl md:text-4xl font-bold">{repo.name}</h1>
+            <h1 className="text-2xl md:text-3xl font-bold">{repo.name}</h1>
             <span className={`px-3 py-1 text-sm font-medium ${
               repo.isPublic 
                 ? 'bg-green-100 text-green-800' 
@@ -153,17 +153,17 @@ export default function RepositoryDetailsPage({ params }: { params: Promise<{ id
           </div>
         </div>
         
-        <div className="flex gap-2 ml-4">
+        <div className="flex gap-2 mt-4 md:mt-0 md:ml-4 w-full md:w-auto">
           {repo.isPublic && (
-            <Link href={`/repository/${repo.id}`} target="_blank">
-              <Button variant="secondary" className="text-sm px-4 py-2">
+            <Link href={`/repository/${repo.id}`} target="_blank" className="w-full md:w-auto">
+              <Button variant="secondary" className="text-sm px-4 py-2 w-full md:w-auto">
                 🌍 View Public
               </Button>
             </Link>
           )}
           <Button 
             variant="secondary" 
-            className="text-sm px-4 py-2 hover:bg-red-100 hover:text-red-600"
+            className="text-sm px-4 py-2 hover:bg-red-100 hover:text-red-600 w-full md:w-auto"
             onClick={deleteRepository}
             disabled={deleting}
           >
