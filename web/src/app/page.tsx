@@ -21,8 +21,9 @@ export default function Home() {
 }
 
 async function Showcase() {
-  const res = await fetch(`${process.env.NEXTAUTH_URL || ''}/api/public/repositories`, { cache: 'no-store' })
-  const data = res.ok ? await res.json() : { repositories: [] }
+  const res = await fetch(`/api/public/repositories`, { cache: 'no-store' })
+  const contentType = res.headers.get('content-type') || ''
+  const data = res.ok && contentType.includes('application/json') ? await res.json() : { repositories: [] }
   const repos: Array<{ id: string; name: string; gifs: Array<{ filename: string }> }> = data.repositories
   const gifs = repos.flatMap(r => r.gifs.slice(0, 2)).slice(0, 8)
   return (

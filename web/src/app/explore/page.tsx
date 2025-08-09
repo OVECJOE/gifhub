@@ -2,9 +2,11 @@ async function getPublicRepos(q?: string, tag?: string) {
   const params = new URLSearchParams()
   if (q) params.set('q', q)
   if (tag) params.set('tag', tag)
-  const url = params.toString() ? `/api/public/search?${params.toString()}` : `${process.env.NEXTAUTH_URL || ''}/api/repositories/public`
+  const url = params.toString() ? `/api/public/search?${params.toString()}` : `/api/repositories/public`
   const res = await fetch(url, { cache: 'no-store' })
   if (!res.ok) return []
+  const contentType = res.headers.get('content-type') || ''
+  if (!contentType.includes('application/json')) return []
   const data = await res.json()
   return (data.repositories || []) as Array<{ id: string; name: string; views: number; tags?: Array<{ name: string }> }>
 }
