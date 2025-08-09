@@ -10,7 +10,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// NextAuth required models
 model User {
   id            String         @id @default(cuid())
   name          String?
@@ -19,15 +18,15 @@ model User {
   image         String?
   passwordHash  String?
 
-  // GifHub relations
   repositories  Repository[]
 
-  // NextAuth relations
   accounts      Account[]
   sessions      Session[]
 
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+
+  @@map("users")
 }
 
 model Account {
@@ -47,6 +46,7 @@ model Account {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
+  @@map("accounts")
 }
 
 model Session {
@@ -56,6 +56,8 @@ model Session {
   expires      DateTime
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
 }
 
 model VerificationToken {
@@ -64,9 +66,9 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+  @@map("verification_tokens")
 }
 
-// GifHub domain models per PRD
 model Repository {
   id          String  @id @default(cuid())
   name        String
@@ -82,6 +84,8 @@ model Repository {
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@map("repositories")
 }
 
 model Gif {
@@ -96,12 +100,14 @@ model Gif {
   repositoryId String
   repository   Repository @relation(fields: [repositoryId], references: [id])
   createdAt    DateTime  @default(now())
+
+  @@map("gifs")
 }
 
 model Tag {
   id           String        @id @default(cuid())
   name         String        @unique
   repositories Repository[]
+
+  @@map("tags")
 }
-
-
