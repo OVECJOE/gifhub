@@ -174,13 +174,13 @@ export default function RepositoriesPage() {
                 </div>
                 <div className="flex gap-2 ml-2">
                   <Link href={`/dashboard/repositories/${repo.id}/edit`}>
-                    <Button variant="secondary" className="text-sm px-3 py-1">
+                    <Button variant="secondary" className="text-xs px-2 py-1">
                       ✏️
                     </Button>
                   </Link>
                   <Button 
                     variant="secondary" 
-                    className="text-sm px-3 py-1 hover:bg-red-100 hover:text-red-600"
+                    className="text-xs px-2 py-1 hover:bg-red-100 hover:text-red-600"
                     onClick={() => deleteRepository(repo.id)}
                   >
                     🗑️
@@ -209,18 +209,11 @@ export default function RepositoriesPage() {
                 </div>
               </div>
 
-              <div className="flex gap-2">
-                <Link href={`/dashboard/repositories/${repo.id}`} className="flex-1">
-                  <Button variant="secondary" className="w-full text-sm">
-                    👀 View
-                  </Button>
-                </Link>
-                <Link href={`/dashboard/repositories/${repo.id}/edit`} className="flex-1">
-                  <Button className="w-full text-sm">
-                    ✏️ Manage
-                  </Button>
-                </Link>
-              </div>
+              <Link href={`/dashboard/repositories/${repo.id}`}>
+                <Button variant="secondary" className="text-xs w-full mt-4">
+                  👀 View
+                </Button>
+              </Link>
             </GlassCard>
           ))}
         </div>

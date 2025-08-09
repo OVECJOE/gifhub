@@ -43,73 +43,120 @@ export function TimelineSelector({ videoFile, onTimeSelect, onMetadata, maxGifDu
     onTimeSelect(start, end)
   }, [start, end, onTimeSelect])
 
-  const timeToPercent = useCallback((time: number) => (time / duration) * 100, [duration])
-  const percentToTime = useCallback((percent: number) => (percent / 100) * duration, [duration])
+  const timeToPercent = useCallback(
+    (time: number) => {
+      if (!Number.isFinite(duration) || duration <= 0) return 0
+      const clampedTime = Math.max(0, Math.min(time, duration))
+      return (clampedTime / duration) * 100
+    },
+    [duration]
+  )
+  const percentToTime = useCallback(
+    (percent: number) => {
+      if (!Number.isFinite(duration) || duration <= 0) return 0
+      if (!Number.isFinite(percent)) return 0
+      const clampedPercent = Math.max(0, Math.min(percent, 100))
+      return (clampedPercent / 100) * duration
+    },
+    [duration]
+  )
 
-  const handleTimelineClick = useCallback((e: React.MouseEvent) => {
-    if (!timelineRef.current || isDragging) return
-    
-    const rect = timelineRef.current.getBoundingClientRect()
-    const percent = ((e.clientX - rect.left) / rect.width) * 100
-    const clickTime = percentToTime(percent)
-    
-    if (videoRef.current) {
-      videoRef.current.currentTime = clickTime
-      setCurrentTime(clickTime)
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isDragging])
+  const clampTime = useCallback(
+    (time: number) => {
+      if (!Number.isFinite(time)) return 0
+      if (!Number.isFinite(duration) || duration <= 0) return 0
+      return Math.max(0, Math.min(time, duration))
+    },
+    [duration]
+  )
 
-  const handleMouseDown = useCallback((e: React.MouseEvent, type: 'start' | 'end' | 'selection') => {
-    e.preventDefault()
-    e.stopPropagation()
-    setIsDragging(type)
-    
-    if (type === 'selection' && timelineRef.current) {
+  const handleTimelineClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (!timelineRef.current || isDragging) return
+      if (!Number.isFinite(duration) || duration <= 0) return
+
       const rect = timelineRef.current.getBoundingClientRect()
-      const clickPercent = ((e.clientX - rect.left) / rect.width) * 100
-      const selectionStartPercent = timeToPercent(start)
-      setDragOffset(clickPercent - selectionStartPercent)
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [start])
+      const percent = ((e.clientX - rect.left) / rect.width) * 100
+      const clickTime = clampTime(percentToTime(percent))
 
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!isDragging || !timelineRef.current) return
-    
-    const rect = timelineRef.current.getBoundingClientRect()
-    const percent = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100))
-    const time = percentToTime(percent)
-    
-    if (isDragging === 'start') {
-      const newStart = Math.max(0, Math.min(time, end - 0.1))
-      setStart(newStart)
       if (videoRef.current) {
-        videoRef.current.currentTime = newStart
-        setCurrentTime(newStart)
+        videoRef.current.currentTime = clickTime
+        setCurrentTime(clickTime)
       }
-    } else if (isDragging === 'end') {
-      const newEnd = Math.max(start + 0.1, Math.min(time, start + maxGifDuration, duration))
-      setEnd(newEnd)
-      if (videoRef.current) {
-        videoRef.current.currentTime = newEnd
-        setCurrentTime(newEnd)
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [isDragging, duration]
+  )
+
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent, type: 'start' | 'end' | 'selection') => {
+      e.preventDefault()
+      e.stopPropagation()
+      if (!Number.isFinite(duration) || duration <= 0) return
+      setIsDragging(type)
+
+      if (type === 'selection' && timelineRef.current) {
+        const rect = timelineRef.current.getBoundingClientRect()
+        const clickPercent = ((e.clientX - rect.left) / rect.width) * 100
+        const selectionStartPercent = timeToPercent(start)
+        const safeSelectionStartPercent = Number.isFinite(selectionStartPercent)
+          ? selectionStartPercent
+          : 0
+        setDragOffset(clickPercent - safeSelectionStartPercent)
       }
-    } else if (isDragging === 'selection') {
-      const adjustedPercent = percent - dragOffset
-      const newStart = Math.max(0, Math.min(percentToTime(adjustedPercent), duration - (end - start)))
-      const selectionDuration = end - start
-      const newEnd = Math.min(newStart + selectionDuration, newStart + maxGifDuration, duration)
-      
-      setStart(newStart)
-      setEnd(newEnd)
-      if (videoRef.current) {
-        videoRef.current.currentTime = newStart
-        setCurrentTime(newStart)
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [start, duration]
+  )
+
+  const handleMouseMove = useCallback(
+    (e: MouseEvent) => {
+      if (!isDragging || !timelineRef.current) return
+      if (!Number.isFinite(duration) || duration <= 0) return
+
+      const rect = timelineRef.current.getBoundingClientRect()
+      const percent = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100))
+      const time = percentToTime(percent)
+
+      if (isDragging === 'start') {
+        const proposedStart = Math.max(0, Math.min(time, end - 0.1))
+        const newStart = clampTime(proposedStart)
+        setStart(newStart)
+        if (videoRef.current) {
+          videoRef.current.currentTime = newStart
+          setCurrentTime(newStart)
+        }
+      } else if (isDragging === 'end') {
+        const proposedEnd = Math.max(start + 0.1, Math.min(time, start + maxGifDuration, duration))
+        const newEnd = clampTime(proposedEnd)
+        setEnd(newEnd)
+        if (videoRef.current) {
+          videoRef.current.currentTime = newEnd
+          setCurrentTime(newEnd)
+        }
+      } else if (isDragging === 'selection') {
+        const adjustedPercent = Number.isFinite(dragOffset) ? percent - dragOffset : percent
+        const proposedStart = Math.max(
+          0,
+          Math.min(percentToTime(adjustedPercent), duration - Math.max(0, end - start))
+        )
+        const newStart = clampTime(proposedStart)
+        const selectionDuration = Number.isFinite(end - start) ? Math.max(0, end - start) : 0
+        const newEnd = clampTime(
+          Math.min(newStart + selectionDuration, newStart + maxGifDuration, duration)
+        )
+
+        setStart(newStart)
+        setEnd(newEnd)
+        if (videoRef.current) {
+          videoRef.current.currentTime = newStart
+          setCurrentTime(newStart)
+        }
       }
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isDragging, start, end, maxGifDuration, duration, dragOffset])
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [isDragging, start, end, maxGifDuration, duration, dragOffset]
+  )
 
   const handleMouseUp = useCallback(() => {
     setIsDragging(null)
@@ -129,21 +176,25 @@ export function TimelineSelector({ videoFile, onTimeSelect, onMetadata, maxGifDu
   }, [isDragging])
 
   const playSelection = useCallback(() => {
-    if (videoRef.current) {
-      videoRef.current.currentTime = start
-      videoRef.current.play()
-      
-      const checkTime = () => {
-        if (videoRef.current && videoRef.current.currentTime >= end) {
-          videoRef.current.pause()
-          videoRef.current.currentTime = start
-        } else if (videoRef.current && !videoRef.current.paused) {
-          requestAnimationFrame(checkTime)
-        }
+    if (!videoRef.current) return
+    if (!Number.isFinite(duration) || duration <= 0) return
+
+    const startSafe = clampTime(start)
+    const endSafe = clampTime(end)
+
+    videoRef.current.currentTime = startSafe
+    videoRef.current.play()
+
+    const checkTime = () => {
+      if (videoRef.current && videoRef.current.currentTime >= endSafe) {
+        videoRef.current.pause()
+        videoRef.current.currentTime = startSafe
+      } else if (videoRef.current && !videoRef.current.paused) {
+        requestAnimationFrame(checkTime)
       }
-      requestAnimationFrame(checkTime)
     }
-  }, [start, end])
+    requestAnimationFrame(checkTime)
+  }, [start, end, clampTime, duration])
 
   const resetSelection = useCallback(() => {
     const defaultEnd = Math.min(3, maxGifDuration, duration)
@@ -165,8 +216,16 @@ export function TimelineSelector({ videoFile, onTimeSelect, onMetadata, maxGifDu
           className="w-full bg-black"
           onLoadedMetadata={(e) => {
             const v = e.target as HTMLVideoElement
-            setDuration(v.duration)
-            if (onMetadata) onMetadata(v.duration, v.videoWidth, v.videoHeight)
+            const d = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : 0
+            setDuration(d)
+            // Initialize selection based on actual duration
+            setStart(0)
+            setEnd(Math.min(3, maxGifDuration, d))
+            if (videoRef.current) {
+              videoRef.current.currentTime = 0
+            }
+            setCurrentTime(0)
+            if (onMetadata) onMetadata(d, v.videoWidth, v.videoHeight)
           }}
         />
       </div>

@@ -10,7 +10,8 @@ export async function POST(req: Request) {
   const token = crypto.randomUUID()
   const expires = new Date(Date.now() + 1000 * 60 * 60)
   await prisma.verificationToken.create({ data: { identifier: `reset:${email}`, token, expires } })
-  const link = `reset-password?token=${encodeURIComponent(token)}`
+  const base = process.env.NEXTAUTH_URL || ''
+  const link = `${base}/reset-password?token=${encodeURIComponent(token)}`
   await sendEmail(email, 'Reset your GifHub password', `<p>Click to reset: <a href="${link}">${link}</a></p>`)
   return NextResponse.json({ ok: true })
 }
