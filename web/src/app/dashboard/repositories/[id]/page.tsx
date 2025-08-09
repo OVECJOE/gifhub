@@ -1,10 +1,11 @@
 'use client'
 import { useSession } from 'next-auth/react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/Button'
 import { GlassCard } from '@/components/ui/GlassCard'
+import { ApiGif } from '@/types/gif'
 
 type Repository = {
   id: string
@@ -33,6 +34,9 @@ export default function RepositoryDetailsPage({ params }: { params: Promise<{ id
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState(false)
   const [id, setId] = useState<string>('')
+  const [addModalOpen, setAddModalOpen] = useState(false)
+  const [myGifs, setMyGifs] = useState<Array<Repository['gifs'][number] & { repositoryId: string; repositoryName?: string }>>([])
+  const [selecting, setSelecting] = useState<string | null>(null)
 
   useEffect(() => {
     params.then(p => setId(p.id))
@@ -41,6 +45,7 @@ export default function RepositoryDetailsPage({ params }: { params: Promise<{ id
   useEffect(() => {
     if (status === 'authenticated' && id) {
       fetchRepository()
+      fetchMyRecentGifs()
     } else if (status === 'unauthenticated') {
       redirect('/login')
     }
@@ -60,6 +65,31 @@ export default function RepositoryDetailsPage({ params }: { params: Promise<{ id
       console.error('Failed to fetch repository:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchMyRecentGifs = async () => {
+    try {
+      const res = await fetch(`/api/gifs?recent=50`, { cache: 'no-store' })
+      if (res.ok) {
+        const data = await res.json()
+        const mapped = ((data.gifs as ApiGif[] | undefined) || []).map((g) => ({
+          id: g.id,
+          filename: g.filename,
+          originalName: g.originalName,
+          downloads: g.downloads,
+          createdAt: g.createdAt,
+          fileSize: g.fileSize,
+          duration: g.duration,
+          width: g.width,
+          height: g.height,
+          repositoryId: g.repository.id,
+          repositoryName: g.repository.name,
+        }))
+        setMyGifs(mapped)
+      }
+    } catch (e) {
+      console.error('Failed to fetch my gifs', e)
     }
   }
 
@@ -91,6 +121,30 @@ export default function RepositoryDetailsPage({ params }: { params: Promise<{ id
     } catch (error) {
       console.error('Failed to delete repository:', error)
       setDeleting(false)
+    }
+  }
+
+  const repoGifIds = useMemo(() => new Set((repo?.gifs || []).map(g => g.id)), [repo])
+
+  const addExistingGif = async (gifId: string) => {
+    if (!id) return
+    setSelecting(gifId)
+    try {
+      const res = await fetch(`/api/repositories/${id}/gifs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gifId })
+      })
+      if (res.ok) {
+        const data = await res.json()
+        const newGif = data.gif
+        setRepo(prev => prev ? { ...prev, gifs: [newGif, ...prev.gifs] } : prev)
+        setAddModalOpen(false)
+      }
+    } catch (e) {
+      console.error('Failed to add existing gif', e)
+    } finally {
+      setSelecting(null)
     }
   }
 
@@ -209,11 +263,16 @@ export default function RepositoryDetailsPage({ params }: { params: Promise<{ id
         <GlassCard className="p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-semibold">GIFs in this Repository</h2>
-            <Link href="/dashboard/upload">
-              <Button className="text-sm px-4 py-2">
-                ➕ Add More GIFs
+            <div className="flex gap-2">
+              <Link href="/dashboard/upload">
+                <Button className="text-sm px-4 py-2">
+                  📹 Upload New
+                </Button>
+              </Link>
+              <Button variant="secondary" className="text-sm px-4 py-2" onClick={() => setAddModalOpen(true)}>
+                ➕ Add Existing
               </Button>
-            </Link>
+            </div>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -280,12 +339,60 @@ export default function RepositoryDetailsPage({ params }: { params: Promise<{ id
           <p className="text-gray-600 mb-6">
             Upload videos and convert them to GIFs to populate this repository
           </p>
-          <Link href="/dashboard/upload">
-            <Button className="text-lg px-8 py-4">
-              📹 Upload Your First Video
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <Link href="/dashboard/upload">
+              <Button className="text-lg px-8 py-4 w-full sm:w-auto">
+                📹 Upload New
+              </Button>
+            </Link>
+            <Button variant="secondary" className="text-lg px-8 py-4 w-full sm:w-auto" onClick={() => setAddModalOpen(true)}>
+              ➕ Add Existing
             </Button>
-          </Link>
+          </div>
         </GlassCard>
+      )}
+
+      {addModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setAddModalOpen(false)} />
+          <div className="relative bg-white rounded-md shadow-lg w-[95vw] max-w-3xl max-h-[80vh] overflow-hidden">
+            <div className="p-4 border-b flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Add Existing GIF</h3>
+              <button className="text-gray-500 hover:text-black" onClick={() => setAddModalOpen(false)}>✕</button>
+            </div>
+            <div className="p-4 overflow-auto max-h-[70vh]">
+              {myGifs.length === 0 ? (
+                <div className="text-center text-gray-600 py-8">No GIFs found in your account.</div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {myGifs.map(g => {
+                    const alreadyInRepo = repoGifIds.has(g.id) || g.repositoryId === id
+                    return (
+                      <div key={g.id} className={`border p-3 ${alreadyInRepo ? 'opacity-60' : ''}`}>
+                        <div className="aspect-video bg-gray-100 mb-2 flex items-center justify-center">
+                          <img src={g.filename} alt={g.originalName} className="max-w-full max-h-full object-contain" />
+                        </div>
+                        <div className="text-sm font-medium truncate" title={g.originalName}>{g.originalName}</div>
+                        <div className="text-xs text-gray-600">{g.width}×{g.height} · {g.duration.toFixed(1)}s</div>
+                        {g.repositoryName && (
+                          <div className="text-xs text-gray-500">From: {g.repositoryName}</div>
+                        )}
+                        <Button
+                          className="mt-2 w-full text-sm"
+                          variant="secondary"
+                          disabled={alreadyInRepo || selecting === g.id}
+                          onClick={() => addExistingGif(g.id)}
+                        >
+                          {alreadyInRepo ? 'Already in repository' : selecting === g.id ? 'Adding…' : 'Add to repository'}
+                        </Button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
