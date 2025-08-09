@@ -45,6 +45,15 @@ export default async function PublicRepositoryPage({ params }: { params: Promise
     })
   }
 
+  if (!repo) {
+    return (
+      <div className="space-y-8">
+        <div className="h-8 bg-gray-200 animate-pulse"></div>
+        <div className="h-64 bg-gray-200 animate-pulse"></div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-8">
       {/* Repository Header */}
