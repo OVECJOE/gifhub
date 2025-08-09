@@ -9,7 +9,7 @@ export default function Home() {
         <h1 className="text-3xl md:text-5xl font-bold leading-tight max-w-xl mx-auto">Create, Organize, and Share High-Quality GIFs</h1>
         <p className="text-lg md:text-2xl mt-4 max-w-2xl mx-auto">Upload videos, convert to GIFs client-side, and share publicly.</p>
         <div className="mt-6 flex justify-center gap-4">
-          <Link href="/upload"><Button>Get Started</Button></Link>
+          <Link href="/dashboard/upload"><Button>Get Started</Button></Link>
           <Link href="/explore"><Button variant="secondary">Explore</Button></Link>
         </div>
       </section>
