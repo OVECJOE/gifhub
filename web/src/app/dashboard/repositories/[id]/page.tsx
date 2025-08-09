@@ -263,13 +263,13 @@ export default function RepositoryDetailsPage({ params }: { params: Promise<{ id
         <GlassCard className="p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-semibold">GIFs in this Repository</h2>
-            <div className="flex gap-2">
-              <Link href="/dashboard/upload">
+            <div className="flex flex-col md:flex-row gap-2">
+              <Link href="/dashboard/upload" className="w-full md:w-auto">
                 <Button className="text-sm px-4 py-2">
                   📹 Upload New
                 </Button>
               </Link>
-              <Button variant="secondary" className="text-sm px-4 py-2" onClick={() => setAddModalOpen(true)}>
+              <Button variant="secondary" className="text-sm px-4 py-2 w-full md:w-auto" onClick={() => setAddModalOpen(true)}>
                 ➕ Add Existing
               </Button>
             </div>

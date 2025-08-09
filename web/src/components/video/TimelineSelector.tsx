@@ -19,6 +19,11 @@ export function TimelineSelector({ videoFile, onTimeSelect, onMetadata, maxGifDu
   const [isDragging, setIsDragging] = useState<'start' | 'end' | 'selection' | null>(null)
   const [dragOffset, setDragOffset] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
+  const [activePointerId, setActivePointerId] = useState<number | null>(null)
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const initialPressPosRef = useRef<{ x: number; time: number } | null>(null)
+  const lastTapRef = useRef<{ x: number; time: number } | null>(null)
+  const longPressTriggeredRef = useRef<boolean>(false)
 
   useEffect(() => {
     const url = URL.createObjectURL(videoFile)
@@ -88,16 +93,17 @@ export function TimelineSelector({ videoFile, onTimeSelect, onMetadata, maxGifDu
     [isDragging, duration]
   )
 
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent, type: 'start' | 'end' | 'selection') => {
-      e.preventDefault()
-      e.stopPropagation()
+  // Unified pointer handlers for mouse + touch
+  const beginDrag = useCallback(
+    (
+      clientX: number,
+      type: 'start' | 'end' | 'selection',
+    ) => {
       if (!Number.isFinite(duration) || duration <= 0) return
       setIsDragging(type)
-
       if (type === 'selection' && timelineRef.current) {
         const rect = timelineRef.current.getBoundingClientRect()
-        const clickPercent = ((e.clientX - rect.left) / rect.width) * 100
+        const clickPercent = ((clientX - rect.left) / rect.width) * 100
         const selectionStartPercent = timeToPercent(start)
         const safeSelectionStartPercent = Number.isFinite(selectionStartPercent)
           ? selectionStartPercent
@@ -105,13 +111,13 @@ export function TimelineSelector({ videoFile, onTimeSelect, onMetadata, maxGifDu
         setDragOffset(clickPercent - safeSelectionStartPercent)
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [start, duration]
+    [duration, start, timeToPercent]
   )
 
-  const handleMouseMove = useCallback(
-    (e: MouseEvent) => {
+  const handlePointerMoveWindow = useCallback(
+    (e: PointerEvent) => {
       if (!isDragging || !timelineRef.current) return
+      if (activePointerId !== null && e.pointerId !== activePointerId) return
       if (!Number.isFinite(duration) || duration <= 0) return
 
       const rect = timelineRef.current.getBoundingClientRect()
@@ -154,26 +160,76 @@ export function TimelineSelector({ videoFile, onTimeSelect, onMetadata, maxGifDu
         }
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [isDragging, start, end, maxGifDuration, duration, dragOffset]
+    [isDragging, activePointerId, duration, percentToTime, clampTime, end, start, maxGifDuration, dragOffset]
   )
 
-  const handleMouseUp = useCallback(() => {
+  const endDrag = useCallback(() => {
     setIsDragging(null)
     setDragOffset(0)
+    setActivePointerId(null)
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current)
+      longPressTimerRef.current = null
+    }
+    initialPressPosRef.current = null
+    longPressTriggeredRef.current = false
   }, [])
 
   useEffect(() => {
     if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove)
-      document.addEventListener('mouseup', handleMouseUp)
+      window.addEventListener('pointermove', handlePointerMoveWindow)
+      window.addEventListener('pointerup', endDrag)
+      window.addEventListener('pointercancel', endDrag)
       return () => {
-        document.removeEventListener('mousemove', handleMouseMove)
-        document.removeEventListener('mouseup', handleMouseUp)
+        window.removeEventListener('pointermove', handlePointerMoveWindow)
+        window.removeEventListener('pointerup', endDrag)
+        window.removeEventListener('pointercancel', endDrag)
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isDragging])
+  }, [isDragging, handlePointerMoveWindow, endDrag])
+
+  const isDoubleTap = useCallback((clientX: number) => {
+    const now = Date.now()
+    const last = lastTapRef.current
+    const DOUBLE_TAP_MS = 300
+    const DOUBLE_TAP_PX = 30
+    if (last && now - last.time < DOUBLE_TAP_MS && Math.abs(clientX - last.x) < DOUBLE_TAP_PX) {
+      lastTapRef.current = null
+      return true
+    }
+    lastTapRef.current = { x: clientX, time: now }
+    return false
+  }, [])
+
+  const scheduleLongPress = useCallback((clientX: number) => {
+    if (!timelineRef.current) return
+    const rect = timelineRef.current.getBoundingClientRect()
+    const PRESS_MS = 450
+    initialPressPosRef.current = { x: clientX, time: Date.now() }
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current)
+    longPressTimerRef.current = setTimeout(() => {
+      // Begin selection by long-press: set start at press position, then drag to set end
+      const percent = Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100))
+      const startTime = clampTime(percentToTime(percent))
+      setStart(startTime)
+      const defaultEnd = clampTime(Math.min(startTime + 1, startTime + maxGifDuration, duration))
+      setEnd(defaultEnd)
+      setIsDragging('end')
+      longPressTriggeredRef.current = true
+    }, PRESS_MS)
+  }, [clampTime, duration, maxGifDuration, percentToTime])
+
+  const cancelLongPressIfMoved = useCallback((clientX: number) => {
+    const MOVE_PX = 12
+    const startPos = initialPressPosRef.current
+    if (!startPos) return
+    if (Math.abs(clientX - startPos.x) > MOVE_PX) {
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current)
+        longPressTimerRef.current = null
+      }
+    }
+  }, [])
 
   const playSelection = useCallback(() => {
     if (!videoRef.current) return
@@ -254,11 +310,59 @@ export function TimelineSelector({ videoFile, onTimeSelect, onMetadata, maxGifDu
 
         {/* Visual Timeline */}
         <div className="relative">
-          <div
-            ref={timelineRef}
-            className="relative h-16 bg-gray-200 cursor-pointer border border-gray-300"
-            onClick={handleTimelineClick}
-          >
+            <div
+              ref={timelineRef}
+              className="relative h-16 bg-gray-200 cursor-pointer border border-gray-300 touch-none select-none"
+              onClick={handleTimelineClick}
+              onPointerDown={(e) => {
+                // Prevent page scroll/zoom while interacting
+                e.preventDefault()
+                e.stopPropagation()
+                if (activePointerId !== null) return
+                setActivePointerId(e.pointerId)
+                const clientX = e.clientX
+
+                // Double-tap anywhere on timeline to grab and drag selection
+                if (isDoubleTap(clientX)) {
+                  beginDrag(clientX, 'selection')
+                  return
+                }
+
+                // If pressed directly on handles or selection, start respective drag immediately via handlers below
+                // Otherwise, schedule long-press to begin creating a selection
+                scheduleLongPress(clientX)
+              }}
+              onPointerMove={(e) => {
+                cancelLongPressIfMoved(e.clientX)
+              }}
+              onPointerUp={(e) => {
+                // If long-press didn't trigger and no drag started, treat as simple seek handled by onClick
+                if (longPressTimerRef.current) {
+                  clearTimeout(longPressTimerRef.current)
+                  longPressTimerRef.current = null
+                }
+                const wasDragging = isDragging !== null
+                const wasLongPress = longPressTriggeredRef.current
+                if (!wasDragging && !wasLongPress && timelineRef.current && Number.isFinite(duration) && duration > 0) {
+                  const rect = timelineRef.current.getBoundingClientRect()
+                  const percent = ((e.clientX - rect.left) / rect.width) * 100
+                  const clickTime = clampTime(percentToTime(percent))
+                  if (videoRef.current) {
+                    videoRef.current.currentTime = clickTime
+                    setCurrentTime(clickTime)
+                  }
+                }
+                longPressTriggeredRef.current = false
+                setActivePointerId(null)
+              }}
+              onPointerCancel={() => {
+                if (longPressTimerRef.current) {
+                  clearTimeout(longPressTimerRef.current)
+                  longPressTimerRef.current = null
+                }
+                setActivePointerId(null)
+              }}
+            >
             {/* Timeline background */}
             <div className="absolute inset-0 bg-gradient-to-r from-gray-300 to-gray-400"></div>
             
@@ -280,7 +384,7 @@ export function TimelineSelector({ videoFile, onTimeSelect, onMetadata, maxGifDu
 
             {/* Selection area */}
             <div
-              className={`absolute top-0 h-full cursor-move z-10 border-2 transition-all ${
+              className={`absolute top-0 h-full ${isDragging ? 'cursor-grabbing' : 'cursor-grab'} z-10 border-2 transition-all ${
                 isPlaying && currentTime >= start && currentTime <= end
                   ? 'bg-black/60 border-black shadow-lg'
                   : 'bg-gray-500/60 border-gray-700'
@@ -289,7 +393,13 @@ export function TimelineSelector({ videoFile, onTimeSelect, onMetadata, maxGifDu
                 left: `${timeToPercent(start)}%`,
                 width: `${timeToPercent(end - start)}%`,
               }}
-              onMouseDown={(e) => handleMouseDown(e, 'selection')}
+              onPointerDown={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                if (activePointerId !== null) return
+                setActivePointerId(e.pointerId)
+                beginDrag(e.clientX, 'selection')
+              }}
             >
               {/* Selection label */}
               <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-white text-xs font-bold pointer-events-none">
@@ -306,18 +416,30 @@ export function TimelineSelector({ videoFile, onTimeSelect, onMetadata, maxGifDu
 
             {/* Start handle */}
             <div
-              className="absolute top-0 w-3 h-full bg-black cursor-w-resize z-20 hover:bg-gray-900 transition-colors"
+              className="absolute top-0 w-4 md:w-3 h-full bg-black cursor-w-resize z-20 hover:bg-gray-900 transition-colors"
               style={{ left: `${timeToPercent(start)}%` }}
-              onMouseDown={(e) => handleMouseDown(e, 'start')}
+              onPointerDown={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                if (activePointerId !== null) return
+                setActivePointerId(e.pointerId)
+                beginDrag(e.clientX, 'start')
+              }}
             >
               <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-white text-xs">⟨</div>
             </div>
 
             {/* End handle */}
             <div
-              className="absolute top-0 w-3 h-full bg-black cursor-e-resize z-20 hover:bg-gray-900 transition-colors"
+              className="absolute top-0 w-4 md:w-3 h-full bg-black cursor-e-resize z-20 hover:bg-gray-900 transition-colors"
               style={{ left: `${timeToPercent(end)}%` }}
-              onMouseDown={(e) => handleMouseDown(e, 'end')}
+              onPointerDown={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                if (activePointerId !== null) return
+                setActivePointerId(e.pointerId)
+                beginDrag(e.clientX, 'end')
+              }}
             >
               <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-white text-xs">⟩</div>
             </div>
@@ -407,14 +529,15 @@ export function TimelineSelector({ videoFile, onTimeSelect, onMetadata, maxGifDu
         </div>
 
         {/* Instructions */}
-        <div className="text-sm text-gray-600 bg-gray-100 p-3 border border-gray-200">
+          <div className="text-sm text-gray-600 bg-gray-100 p-3 border border-gray-200">
           <div className="font-medium mb-1">💡 How to use:</div>
           <ul className="space-y-1">
-            <li>• <strong>Click timeline</strong> to jump to any time</li>
-            <li>• <strong>Drag handles</strong> (⟨ ⟩) to adjust start/end times</li>
-            <li>• <strong>Drag selection area</strong> to move the entire selection</li>
-            <li>• <strong>Preview Selection</strong> button plays only your selected portion</li>
-            <li>• <strong>Visual feedback</strong>: Gray indicator = paused, Black = playing, Selection darkens when active</li>
+            <li>• <strong>Tap/click</strong> anywhere on the timeline to seek</li>
+            <li>• <strong>Long&nbsp;press</strong> on the timeline to start a new selection, then drag to set the end</li>
+            <li>• <strong>Double&nbsp;tap</strong> the timeline to grab and <strong>drag</strong> the whole selection</li>
+            <li>• <strong>Drag handles</strong> (⟨ ⟩) to adjust start/end times precisely</li>
+            <li>• <strong>Preview Selection</strong> plays only your selected portion</li>
+            <li>• <strong>Visual feedback</strong>: Gray = paused, Black = playing; selection darkens when active</li>
           </ul>
         </div>
       </div>
