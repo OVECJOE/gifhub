@@ -146,17 +146,12 @@ export default async function PublicRepositoryPage({ params }: { params: Promise
                     <div>📥 {gif.downloads}</div>
                   </div>
                   <div className="flex gap-2 pt-2">
-                    <Link href={gif.filename} download={gif.originalName} className="flex-1">
+                    <Link href={gif.filename} target="_blank" rel="noopener noreferrer" download={`${gif.id}.gif`} className="flex-1">
                       <Button variant="secondary" className="w-full text-sm py-2">💾 Download</Button>
                     </Link>
-                    <form
-                      action={async () => {
-                        'use server'
-                        await fetch(`${process.env.NEXTAUTH_URL || ''}/api/gifs/${gif.id}/download`, { method: 'POST' })
-                      }}
-                    >
-                      <Button type="submit" variant="secondary" className="text-sm py-2">📊 Track</Button>
-                    </form>
+                    <Link href={`/gif/${gif.id}`} className="flex-1">
+                      <Button className="w-full text-sm py-2">Open</Button>
+                    </Link>
                   </div>
                 </div>
               </GlassCard>

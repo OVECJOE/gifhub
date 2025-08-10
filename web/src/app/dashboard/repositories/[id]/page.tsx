@@ -275,7 +275,7 @@ export default function RepositoryDetailsPage({ params }: { params: Promise<{ id
             </div>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {repo.gifs.map(gif => (
               <div key={gif.id} className="bg-white/50 border border-gray-200/50 p-4">
                 <div className="aspect-video bg-gray-200 mb-3 flex items-center justify-center">
