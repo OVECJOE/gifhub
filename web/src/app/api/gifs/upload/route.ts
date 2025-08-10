@@ -19,13 +19,13 @@ export async function POST(req: Request) {
   const arrayBuffer = await file.arrayBuffer()
   const filePath = `${user.id}/${repositoryId}/${Date.now()}-${file.name}`
 
-  const supabaseAdmin = getSupabaseAdmin()
-  const { error } = await supabaseAdmin.storage.from('gifs').upload(filePath, Buffer.from(arrayBuffer), {
+  const supabase = getSupabaseAdmin()
+  const { error } = await supabase.storage.from('gifs').upload(filePath, Buffer.from(arrayBuffer), {
     contentType: 'image/gif',
   })
-  if (error) return NextResponse.json({ error: 'Upload failed' }, { status: 500 })
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const { data: publicUrlData } = supabaseAdmin.storage.from('gifs').getPublicUrl(filePath)
+  const { data: publicUrlData } = supabase.storage.from('gifs').getPublicUrl(filePath)
 
   const gif = await prisma.gif.create({
     data: {

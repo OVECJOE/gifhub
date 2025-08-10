@@ -130,6 +130,7 @@ export default function UploadPage() {
       if (res.ok) {
         setSaved(true)
         setTimeout(() => setSaved(false), 3000) // Hide success message after 3s
+        redirect('/dashboard/gifs')
       } else {
         throw new Error('Failed to associate GIF with repository')
       }
