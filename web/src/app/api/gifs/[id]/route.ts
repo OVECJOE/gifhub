@@ -4,7 +4,10 @@ import { auth } from '@/lib/auth'
 
 export async function GET(_req: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params
-  const gif = await prisma.gif.findUnique({ where: { id } })
+  const gif = await prisma.gif.findUnique({
+    where: { id },
+    include: { repository: true }
+  })
   if (!gif) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   return NextResponse.json({ gif })
 }

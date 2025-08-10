@@ -23,11 +23,13 @@ export default function UploadPage() {
   const [preview, setPreview] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [videoMeta, setVideoMeta] = useState<{ duration: number; width: number; height: number } | null>(null)
   const [repositories, setRepositories] = useState<Repository[]>([])
   const [repositoryId, setRepositoryId] = useState<string>('')
   const [loadingRepos, setLoadingRepos] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [uploadedGifId, setUploadedGifId] = useState<string | null>(null)
 
   if (status === 'unauthenticated') {
     redirect('/login')
@@ -70,23 +72,26 @@ export default function UploadPage() {
       })
       const url = URL.createObjectURL(blob)
       setPreview(url)
+      
+      // Upload to Supabase immediately after generation
+      await uploadGifToSupabase(blob)
     } catch (error) {
       console.error('GIF generation failed:', error)
       alert('Failed to generate GIF. Please try again.')
     } finally {
       setBusy(false)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [end, file, fps, quality, scale, start])
 
-  const saveGif = async () => {
-    if (!preview || !repositoryId) return
+  const uploadGifToSupabase = async (blob: Blob) => {
+    if (!repositories.length) return // Wait for repositories to load
     
-    setSaving(true)
+    setUploading(true)
     try {
-      const blob = await fetch(preview).then(r => r.blob())
       const form = new FormData()
       form.append('file', new File([blob], downloadName, { type: 'image/gif' }))
-      form.append('repositoryId', repositoryId)
+      form.append('repositoryId', repositories[0].id) // Use first repo as default
       form.append('metadata', JSON.stringify({ 
         originalName: file?.name || 'video', 
         duration: end - start, 
@@ -96,10 +101,37 @@ export default function UploadPage() {
       
       const res = await fetch('/api/gifs/upload', { method: 'POST', body: form })
       if (res.ok) {
+        const data = await res.json()
+        setUploadedGifId(data.gif.id)
+        setRepositoryId(repositories[0].id)
+      } else {
+        throw new Error('Upload failed')
+      }
+    } catch (error) {
+      console.error('Failed to upload GIF:', error)
+      alert('Failed to upload GIF. Please try again.')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const saveGif = async () => {
+    if (!uploadedGifId || !repositoryId) return
+    
+    setSaving(true)
+    try {
+      // Move the GIF to the selected repository
+      const res = await fetch(`/api/repositories/${repositoryId}/gifs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gifId: uploadedGifId })
+      })
+      
+      if (res.ok) {
         setSaved(true)
         setTimeout(() => setSaved(false), 3000) // Hide success message after 3s
       } else {
-        throw new Error('Upload failed')
+        throw new Error('Failed to associate GIF with repository')
       }
     } catch (error) {
       console.error('Failed to save GIF:', error)
@@ -143,6 +175,11 @@ export default function UploadPage() {
           <Link href="/dashboard">
             <Button variant="secondary" className="text-base px-4 py-2">
               ← Back to Dashboard
+            </Button>
+          </Link>
+          <Link href="/dashboard/gifs">
+            <Button variant="secondary" className="text-base px-4 py-2">
+              🎬 My GIFs
             </Button>
           </Link>
           <Link href="/dashboard/repositories">
@@ -313,31 +350,49 @@ export default function UploadPage() {
                 </div>
               ) : repositories.length > 0 ? (
                 <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Save to Repository</label>
-                    <select 
-                      className="w-full border border-gray-300 px-4 py-3 bg-white/80 text-lg" 
-                      value={repositoryId} 
-                      onChange={(e) => setRepositoryId(e.target.value)}
-                    >
-                      {repositories.map(r => (
-                        <option key={r.id} value={r.id}>{r.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  
-                  {saved ? (
-                    <div className="p-4 bg-green-100 border border-green-300 text-green-800 text-center">
-                      ✅ GIF saved successfully!
+                  {uploading ? (
+                    <div className="text-center py-8">
+                      <div className="text-2xl mb-2">📤</div>
+                      <p>Uploading GIF to Supabase...</p>
                     </div>
+                  ) : uploadedGifId ? (
+                    <>
+                      <div className="p-4 bg-green-50 border border-green-200 text-green-800 text-center mb-4">
+                        ✅ GIF uploaded successfully!
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium mb-2">Move to Repository</label>
+                        <select 
+                          className="w-full border border-gray-300 px-4 py-3 bg-white/80 text-lg" 
+                          value={repositoryId} 
+                          onChange={(e) => setRepositoryId(e.target.value)}
+                        >
+                          {repositories.map(r => (
+                            <option key={r.id} value={r.id}>{r.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      
+                      {saved ? (
+                        <div className="p-4 bg-green-100 border border-green-300 text-green-800 text-center">
+                          ✅ GIF moved to repository successfully!
+                        </div>
+                      ) : (
+                        <Button 
+                          onClick={saveGif}
+                          disabled={saving || !repositoryId}
+                          className="w-full text-lg py-4"
+                        >
+                          {saving ? '📁 Moving...' : '📁 Move to Repository'}
+                        </Button>
+                      )}
+                    </>
                   ) : (
-                    <Button 
-                      onClick={saveGif}
-                      disabled={saving || !repositoryId}
-                      className="w-full text-lg py-4"
-                    >
-                      {saving ? '💾 Saving...' : '💾 Save to Repository'}
-                    </Button>
+                    <div className="text-center py-8">
+                      <div className="text-2xl mb-2">⏳</div>
+                      <p>GIF will be uploaded automatically after generation</p>
+                    </div>
                   )}
                 </div>
               ) : (

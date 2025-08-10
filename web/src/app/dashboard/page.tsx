@@ -133,6 +133,11 @@ export default function DashboardPage() {
               📹 Upload Video
             </Button>
           </Link>
+          <Link href="/dashboard/gifs">
+            <Button variant="secondary" className="text-base px-4 py-2">
+              🎬 My GIFs
+            </Button>
+          </Link>
           <Link href="/dashboard/repositories">
             <Button variant="secondary" className="text-base px-4 py-2">
               📁 My Repositories
@@ -217,7 +222,7 @@ export default function DashboardPage() {
         <GlassCard className="p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold">Recent GIFs</h2>
-            <Link href="/dashboard/repositories" className="text-sm text-blue-600 hover:underline">View All</Link>
+            <Link href="/dashboard/gifs" className="text-sm text-blue-600 hover:underline">View All</Link>
           </div>
           
           {loadingStates.recentGifs ? (

@@ -1,7 +1,6 @@
 import { notFound } from 'next/navigation'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { Button } from '@/components/ui/Button'
-import Link from 'next/link'
 
 async function getRepo(id: string) {
   const res = await fetch(`${process.env.NEXTAUTH_URL || ''}/api/public/repositories/${id}`, { cache: 'no-store' })
@@ -146,12 +145,17 @@ export default async function PublicRepositoryPage({ params }: { params: Promise
                     <div>📥 {gif.downloads}</div>
                   </div>
                   <div className="flex gap-2 pt-2">
-                    <Link href={gif.filename} target="_blank" rel="noopener noreferrer" download={`${gif.id}.gif`} className="flex-1">
-                      <Button variant="secondary" className="w-full text-sm py-2">💾 Download</Button>
-                    </Link>
-                    <Link href={`/gif/${gif.id}`} className="flex-1">
-                      <Button className="w-full text-sm py-2">Open</Button>
-                    </Link>
+                    <Button 
+                      variant="secondary" 
+                      className="w-full text-sm py-2"
+                      onClick={async () => {
+                        'use client'
+                        const { downloadFile } = await import('@/lib/utils')
+                        await downloadFile(gif.filename, `${gif.id}.gif`)
+                      }}
+                    >
+                      💾 Download
+                    </Button>
                   </div>
                 </div>
               </GlassCard>

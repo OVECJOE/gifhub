@@ -3,8 +3,7 @@ import { useSession } from 'next-auth/react'
 import { useEffect, useMemo, useState } from 'react'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
-import { Button } from '@/components/ui/Button'
-import { GlassCard } from '@/components/ui/GlassCard'
+import { Button, GlassCard, Modal } from '@/components/ui'
 import { ApiGif } from '@/types/gif'
 
 type Repository = {
@@ -176,6 +175,11 @@ export default function RepositoryDetailsPage({ params }: { params: Promise<{ id
               📹 Upload Video
             </Button>
           </Link>
+          <Link href="/dashboard/gifs">
+            <Button variant="secondary" className="text-base px-4 py-2">
+              🎬 My GIFs
+            </Button>
+          </Link>
           <Link href={`/dashboard/repositories/${id}/edit`}>
             <Button variant="secondary" className="text-base px-4 py-2">
               ✏️ Edit Repository
@@ -310,15 +314,16 @@ export default function RepositoryDetailsPage({ params }: { params: Promise<{ id
                   </div>
                   
                   <div className="flex gap-2 mt-3">
-                    <a 
-                      href={gif.filename} 
-                      download={gif.originalName}
-                      className="flex-1"
+                    <Button 
+                      variant="secondary" 
+                      className="w-full text-xs py-2 flex-1"
+                      onClick={async () => {
+                        const { downloadFile } = await import('@/lib/utils')
+                        await downloadFile(gif.filename, gif.originalName)
+                      }}
                     >
-                      <Button variant="secondary" className="w-full text-xs py-2">
-                        💾 Download
-                      </Button>
-                    </a>
+                      💾 Download
+                    </Button>
                     <Button 
                       variant="secondary" 
                       className="text-xs py-2 px-3 hover:bg-red-100 hover:text-red-600"
@@ -352,48 +357,42 @@ export default function RepositoryDetailsPage({ params }: { params: Promise<{ id
         </GlassCard>
       )}
 
-      {addModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setAddModalOpen(false)} />
-          <div className="relative bg-white rounded-md shadow-lg w-[95vw] max-w-3xl max-h-[80vh] overflow-hidden">
-            <div className="p-4 border-b flex items-center justify-between">
-              <h3 className="text-lg font-semibold">Add Existing GIF</h3>
-              <button className="text-gray-500 hover:text-black" onClick={() => setAddModalOpen(false)}>✕</button>
-            </div>
-            <div className="p-4 overflow-auto max-h-[70vh]">
-              {myGifs.length === 0 ? (
-                <div className="text-center text-gray-600 py-8">No GIFs found in your account.</div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {myGifs.map(g => {
-                    const alreadyInRepo = repoGifIds.has(g.id) || g.repositoryId === id
-                    return (
-                      <div key={g.id} className={`border p-3 ${alreadyInRepo ? 'opacity-60' : ''}`}>
-                        <div className="aspect-video bg-gray-100 mb-2 flex items-center justify-center">
-                          <img src={g.filename} alt={g.originalName} className="max-w-full max-h-full object-contain" />
-                        </div>
-                        <div className="text-sm font-medium truncate" title={g.originalName}>{g.originalName}</div>
-                        <div className="text-xs text-gray-600">{g.width}×{g.height} · {g.duration.toFixed(1)}s</div>
-                        {g.repositoryName && (
-                          <div className="text-xs text-gray-500">From: {g.repositoryName}</div>
-                        )}
-                        <Button
-                          className="mt-2 w-full text-sm"
-                          variant="secondary"
-                          disabled={alreadyInRepo || selecting === g.id}
-                          onClick={() => addExistingGif(g.id)}
-                        >
-                          {alreadyInRepo ? 'Already in repository' : selecting === g.id ? 'Adding…' : 'Add to repository'}
-                        </Button>
-                      </div>
-                    )
-                  })}
+      <Modal
+        isOpen={addModalOpen}
+        onClose={() => setAddModalOpen(false)}
+        title="Add Existing GIF"
+        size="lg"
+      >
+        {myGifs.length === 0 ? (
+          <div className="text-center text-gray-600 py-8">No GIFs found in your account.</div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {myGifs.map(g => {
+              const alreadyInRepo = repoGifIds.has(g.id) || g.repositoryId === id
+              return (
+                <div key={g.id} className={`border border-gray-200/60 p-3 ${alreadyInRepo ? 'opacity-60' : ''}`}>
+                  <div className="aspect-video bg-gray-100 mb-2 flex items-center justify-center">
+                    <img src={g.filename} alt={g.originalName} className="max-w-full max-h-full object-contain" />
+                  </div>
+                  <div className="text-sm font-medium truncate text-black" title={g.originalName}>{g.originalName}</div>
+                  <div className="text-xs text-gray-600">{g.width}×{g.height} · {g.duration.toFixed(1)}s</div>
+                  {g.repositoryName && (
+                    <div className="text-xs text-gray-500">From: {g.repositoryName}</div>
+                  )}
+                  <Button
+                    className="mt-2 w-full text-sm"
+                    variant="secondary"
+                    disabled={alreadyInRepo || selecting === g.id}
+                    onClick={() => addExistingGif(g.id)}
+                  >
+                    {alreadyInRepo ? 'Already in repository' : selecting === g.id ? 'Adding…' : 'Add to repository'}
+                  </Button>
                 </div>
-              )}
-            </div>
+              )
+            })}
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
     </div>
   )
 }
