@@ -7,7 +7,7 @@ import { VideoUploader } from '@/components/video/VideoUploader'
 import { TimelineSelector } from '@/components/video/TimelineSelector'
 import { Button } from '@/components/ui/Button'
 import { GlassCard } from '@/components/ui/GlassCard'
-import { generateGif, type GifQuality, estimateGifSize, validateGifSize } from '@/lib/ffmpeg'
+import { generateGif, type GifQuality } from '@/lib/ffmpeg'
 
 type Repository = { id: string; name: string }
 
@@ -16,9 +16,9 @@ export default function UploadPage() {
   const [file, setFile] = useState<File | null>(null)
   const [start, setStart] = useState(0)
   const [end, setEnd] = useState(0)
-  const [quality, setQuality] = useState<GifQuality>('medium') // Changed default to medium for better size optimization
-  const [fps, setFps] = useState<8 | 10 | 12 | 15>(10) // Changed default to 10fps for smaller files
-  const [scale, setScale] = useState<'original' | '720' | '480' | '360' | '240'>('360') // Changed default to 360p for smaller files
+  const [quality, setQuality] = useState<GifQuality>('high')
+  const [fps, setFps] = useState<10 | 15 | 24>(15)
+  const [scale, setScale] = useState<'original' | '720' | '480' | '360'>('original')
   const [progress, setProgress] = useState(0)
   const [preview, setPreview] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -30,7 +30,6 @@ export default function UploadPage() {
   const [loadingRepos, setLoadingRepos] = useState(false)
   const [saved, setSaved] = useState(false)
   const [uploadedGifId, setUploadedGifId] = useState<string | null>(null)
-  const [fileSizeWarning, setFileSizeWarning] = useState<string | null>(null)
 
   if (status === 'unauthenticated') {
     redirect('/login')
@@ -61,8 +60,6 @@ export default function UploadPage() {
     if (!file) return
     setBusy(true)
     setProgress(0)
-    setFileSizeWarning(null)
-    
     try {
       const blob = await generateGif({ 
         file, 
@@ -73,13 +70,6 @@ export default function UploadPage() {
         scale, 
         onProgress: setProgress 
       })
-      
-      // Validate file size
-      const validation = validateGifSize(blob)
-      if (!validation.isValid) {
-        setFileSizeWarning(`⚠️ GIF is ${(validation.size / 1024).toFixed(1)}KB (target: ${(validation.maxSize / 1024).toFixed(0)}KB). Consider using lower quality or resolution.`)
-      }
-      
       const url = URL.createObjectURL(blob)
       setPreview(url)
       
@@ -158,22 +148,16 @@ export default function UploadPage() {
   )
 
   const estimatedSize = useMemo(() => {
-    if (!file || end <= start || !videoMeta) return null
-    
-    const duration = Math.min(end - start, 10) // Cap at 10 seconds max
-    const estimatedBytes = estimateGifSize(
-      videoMeta.width,
-      videoMeta.height,
-      duration,
-      fps,
-      quality,
-      scale
-    )
-    
-    return estimatedBytes > 1024 * 1024 
-      ? `~${(estimatedBytes / (1024 * 1024)).toFixed(1)}MB`
-      : `~${(estimatedBytes / 1024).toFixed(0)}KB`
-  }, [file, end, start, fps, quality, scale, videoMeta])
+    if (!file || end <= start) return null
+    const duration = end - start
+    const pixels = (videoMeta?.width || 720) * (videoMeta?.height || 480)
+    const frames = duration * fps
+    const bytesPerFrame = pixels * (quality === 'high' ? 0.8 : quality === 'medium' ? 0.6 : 0.4)
+    const totalBytes = frames * bytesPerFrame
+    return totalBytes > 1024 * 1024 
+      ? `~${(totalBytes / (1024 * 1024)).toFixed(1)}MB`
+      : `~${(totalBytes / 1024).toFixed(0)}KB`
+  }, [file, end, start, fps, quality, videoMeta])
 
   if (status === 'loading') {
     return (
@@ -280,14 +264,6 @@ export default function UploadPage() {
       {file && end > start && (
         <GlassCard className="p-6">
           <h2 className="text-xl font-semibold mb-4">⚙️ GIF Settings</h2>
-          
-          {/* File Size Warning */}
-          {fileSizeWarning && (
-            <div className="mb-4 p-3 bg-yellow-100 border border-yellow-300 text-yellow-800">
-              {fileSizeWarning}
-            </div>
-          )}
-          
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
               <label className="block text-sm font-medium mb-2">Quality</label>
@@ -296,9 +272,9 @@ export default function UploadPage() {
                 value={quality} 
                 onChange={(e) => setQuality(e.target.value as GifQuality)}
               >
-                <option value="high">🎯 High (8 colors)</option>
-                <option value="medium">⚖️ Medium (16 colors)</option>
-                <option value="low">💾 Low (32 colors)</option>
+                <option value="high">🎯 High (64 colors)</option>
+                <option value="medium">⚖️ Medium (128 colors)</option>
+                <option value="low">💾 Low (256 colors)</option>
               </select>
             </div>
             <div>
@@ -306,12 +282,11 @@ export default function UploadPage() {
               <select 
                 className="w-full border border-gray-300 px-4 py-3 bg-white/80 text-lg" 
                 value={fps} 
-                onChange={(e) => setFps(parseInt(e.target.value, 10) as 8|10|12|15)}
+                onChange={(e) => setFps(parseInt(e.target.value, 10) as 10|15|24)}
               >
-                <option value={8}>🐌 8 fps (Smallest)</option>
-                <option value={10}>⚡ 10 fps (Balanced)</option>
-                <option value={12}>🚀 12 fps (Smooth)</option>
-                <option value={15}>💨 15 fps (Fast)</option>
+                <option value={10}>🐌 10 fps (Smaller)</option>
+                <option value={15}>⚡ 15 fps (Balanced)</option>
+                <option value={24}>🚀 24 fps (Smooth)</option>
               </select>
             </div>
             <div>
@@ -319,26 +294,15 @@ export default function UploadPage() {
               <select 
                 className="w-full border border-gray-300 px-4 py-3 bg-white/80 text-lg" 
                 value={scale} 
-                onChange={(e) => setScale(e.target.value as 'original' | '720' | '480' | '360' | '240')}
+                onChange={(e) => setScale(e.target.value as 'original' | '720' | '480' | '360')}
               >
                 <option value="original">📺 Original</option>
                 <option value="720">🎬 720p HD</option>
                 <option value="480">📱 480p</option>
                 <option value="360">💾 360p (Compact)</option>
-                <option value="240">📱 240p (Tiny)</option>
               </select>
             </div>
           </div>
-          
-          {/* Estimated Size Display */}
-          {estimatedSize && (
-            <div className="mt-4 p-3 bg-gray-100 text-gray-700">
-              📊 Estimated size: <strong>{estimatedSize}</strong>
-              {estimatedSize.includes('MB') && (
-                <span className="text-red-600 ml-2">⚠️ Large file - consider lower quality/resolution</span>
-              )}
-            </div>
-          )}
           
           <div className="mt-6">
             <Button 
