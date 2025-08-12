@@ -20,9 +20,17 @@ export async function GET(req: Request) {
   try {
     const gifs = await prisma.gif.findMany({
       where: {
-        repository: {
-          userId: user.id
-        }
+        OR: [
+          {
+            repository: {
+              userId: user.id
+            }
+          },
+          {
+            userId: user.id,
+            repositoryId: null
+          }
+        ]
       },
       include: {
         repository: {

@@ -49,17 +49,19 @@ export async function GET(req: Request) {
         },
         createdAt: repo.createdAt.toISOString()
       })),
-      ...recentGifs.map(gif => ({
-        id: `gif_${gif.id}`,
-        type: 'gif_uploaded' as const,
-        user: gif.repository.user,
-        repository: {
-          id: gif.repository.id,
-          name: gif.repository.name,
-          description: gif.repository.description
-        },
-        createdAt: gif.createdAt.toISOString()
-      }))
+      ...recentGifs
+        .filter(gif => gif.repository) // Ensure repository exists
+        .map(gif => ({
+          id: `gif_${gif.id}`,
+          type: 'gif_uploaded' as const,
+          user: gif.repository!.user,
+          repository: {
+            id: gif.repository!.id,
+            name: gif.repository!.name,
+            description: gif.repository!.description
+          },
+          createdAt: gif.createdAt.toISOString()
+        }))
     ]
     
     // Sort by creation date and limit

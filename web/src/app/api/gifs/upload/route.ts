@@ -13,12 +13,15 @@ export async function POST(req: Request) {
   const file = form.get('file') as File | null
   const repositoryId = form.get('repositoryId') as string | null
   const metadataRaw = form.get('metadata') as string | null
-  if (!file || !repositoryId || !metadataRaw) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
+  if (!file || !metadataRaw) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
   const metadata = JSON.parse(metadataRaw) as { originalName: string; duration: number; width: number; height: number }
 
   try {
     const arrayBuffer = await file.arrayBuffer()
-    const filePath = `gifs/${user.id}/${repositoryId}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`
+    const filePath = repositoryId 
+      ? `gifs/${user.id}/${repositoryId}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`
+      : `gifs/${user.id}/orphaned/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`
+    
     const bucketName = getGCSBucketName()
 
     await uploadToGCS({
@@ -28,7 +31,7 @@ export async function POST(req: Request) {
       contentType: 'image/gif',
       metadata: {
         userId: user.id,
-        repositoryId,
+        repositoryId: repositoryId || 'orphaned',
         originalName: metadata.originalName,
         uploadedAt: new Date().toISOString(),
       },
@@ -43,6 +46,7 @@ export async function POST(req: Request) {
         width: metadata.width,
         height: metadata.height,
         repositoryId,
+        userId: user.id,
       },
     })
 

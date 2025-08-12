@@ -21,7 +21,7 @@ type Gif = {
   repository: {
     id: string
     name: string
-  }
+  } | null
 }
 
 export default function DashboardGifsPage() {
@@ -72,7 +72,7 @@ export default function DashboardGifsPage() {
   const filteredAndSortedGifs = gifs
     .filter(gif => 
       gif.originalName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      gif.repository.name.toLowerCase().includes(searchTerm.toLowerCase())
+      (gif.repository?.name || '').toLowerCase().includes(searchTerm.toLowerCase())
     )
     .sort((a, b) => {
       switch (sortBy) {
@@ -192,10 +192,10 @@ export default function DashboardGifsPage() {
                     {gif.originalName}
                   </h3>
                   <Link 
-                    href={`/dashboard/repositories/${gif.repository.id}`}
+                    href={`/dashboard/repositories/${gif.repository?.id}`}
                     className="text-sm text-blue-600 hover:underline"
                   >
-                    📁 {gif.repository.name}
+                    📁 {gif.repository?.name || 'Orphaned GIF'}
                   </Link>
                 </div>
                 

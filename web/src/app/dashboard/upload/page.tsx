@@ -62,14 +62,14 @@ export default function UploadPage() {
     setBusy(true)
     setProgress(0)
     try {
-      const blob = await generateGif({
-        file,
-        startTime: start,
-        endTime: end,
-        fps,
-        quality,
-        scale,
-        onProgress: setProgress
+      const blob = await generateGif({ 
+        file, 
+        startTime: start, 
+        endTime: end, 
+        fps, 
+        quality, 
+        scale, 
+        onProgress: setProgress 
       })
       const url = URL.createObjectURL(blob)
       setPreview(url)
@@ -80,7 +80,7 @@ export default function UploadPage() {
     } finally {
       setBusy(false)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [end, file, fps, quality, scale, start])
 
   const saveGifToCloud = async (blob: Blob) => {
@@ -88,19 +88,23 @@ export default function UploadPage() {
     try {
       const form = new FormData()
       form.append('file', new File([blob], downloadName, { type: 'image/gif' }))
-      form.append('repositoryId', repositories[0].id) // Use first repo as default
-      form.append('metadata', JSON.stringify({
-        originalName: file?.name || 'video',
-        duration: end - start,
-        width: videoMeta?.width || 0,
-        height: videoMeta?.height || 0
+      if (repositories.length > 0) {
+        form.append('repositoryId', repositories[0].id)
+      }
+      form.append('metadata', JSON.stringify({ 
+        originalName: file?.name || 'video', 
+        duration: end - start, 
+        width: videoMeta?.width || 0, 
+        height: videoMeta?.height || 0 
       }))
-
+      
       const res = await fetch('/api/gifs/upload', { method: 'POST', body: form })
       if (res.ok) {
         const data = await res.json()
         setUploadedGifId(data.gif.id)
-        setRepositoryId(repositories[0].id)
+        if (repositories.length > 0) {
+          setRepositoryId(repositories[0].id)
+        }
       } else {
         throw new Error((await res.json()).error || 'Save failed')
       }
@@ -113,15 +117,17 @@ export default function UploadPage() {
 
   const saveGif = async () => {
     if (!uploadedGifId || !repositoryId) return
-
+    
     setSaving(true)
     try {
-      const res = await fetch(`/api/repositories/${repositoryId}/gifs`, {
-        method: 'POST',
+      // If the GIF was already associated with a repository, move it
+      // Otherwise, update the GIF to associate it with the selected repository
+      const res = await fetch(`/api/gifs/${uploadedGifId}`, {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ gifId: uploadedGifId })
+        body: JSON.stringify({ repositoryId })
       })
-
+      
       if (res.ok) {
         setSaved(true)
         setTimeout(() => setSaved(false), 3000)
@@ -384,31 +390,29 @@ export default function UploadPage() {
 
             {/* Save Options */}
             <div>
-              {uploading && (
+              {uploading ? (
                 <div className="text-center py-8">
                   <div className="text-2xl mb-2">📤</div>
-                  <p>Saving your GIF...</p>
+                  <p>Saving your GIF to the cloud...</p>
                 </div>
-              )}
-
-              {uploadedGifId && (
-                <>
-                  <div className="p-4 bg-green-50 border border-green-200 text-green-800 text-center mb-4">
-                    ✅ GIF saved successfully!
+              ) : uploadedGifId ? (
+                <div className="space-y-4">
+                  <div className="p-4 bg-green-50 border border-green-200 text-green-800 text-center">
+                    ✅ GIF saved successfully to the cloud!
                   </div>
-
+                  
                   {loadingRepos ? (
-                    <div className="text-center py-8">
-                      <div className="text-2xl mb-2">⏳</div>
+                    <div className="text-center py-4">
+                      <div className="text-xl mb-2">⏳</div>
                       <p>Loading repositories...</p>
                     </div>
                   ) : repositories.length > 0 ? (
                     <>
                       <div>
                         <label className="block text-sm font-medium mb-2">Move to Repository</label>
-                        <select
-                          className="w-full border border-gray-300 px-4 py-3 bg-white/80 text-lg"
-                          value={repositoryId}
+                        <select 
+                          className="w-full border border-gray-300 px-4 py-3 bg-white/80 text-lg" 
+                          value={repositoryId} 
                           onChange={(e) => setRepositoryId(e.target.value)}
                         >
                           {repositories.map(r => (
@@ -416,13 +420,13 @@ export default function UploadPage() {
                           ))}
                         </select>
                       </div>
-
+                      
                       {saved ? (
                         <div className="p-4 bg-green-100 border border-green-300 text-green-800 text-center">
                           ✅ GIF moved to repository successfully!
                         </div>
                       ) : (
-                        <Button
+                        <Button 
                           onClick={saveGif}
                           disabled={saving || !repositoryId}
                           className="w-full text-lg py-4"
@@ -432,19 +436,28 @@ export default function UploadPage() {
                       )}
                     </>
                   ) : (
-                    <div className="text-center py-8">
-                      <div className="text-2xl mb-2">💾</div>
-                      <p className="mb-2">GIF generated successfully!</p>
+                    <div className="text-center py-4">
+                      <div className="text-2xl mb-2">📁</div>
+                      <p className="mb-2">GIF saved to cloud successfully!</p>
                       <p className="text-sm text-gray-600 mb-4">
-                        You can download your GIF now. Create a repository to save it permanently.
+                        Create a repository to organize your GIFs and make them easily accessible.
                       </p>
                       <Link href="/dashboard/repositories">
                         <Button>Create Repository</Button>
                       </Link>
                     </div>
-                  )
-                  }
-                </>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="text-2xl mb-2">💾</div>
+                  <p>GIF will be saved to the cloud after generation</p>
+                  {repositories.length === 0 && (
+                    <div className="mt-4 p-3 bg-blue-50 border border-blue-200 text-blue-800 text-sm">
+                      💡 No repositories yet? No problem! Your GIF will be saved and you can organize it later.
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>

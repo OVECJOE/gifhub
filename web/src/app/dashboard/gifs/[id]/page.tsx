@@ -24,7 +24,7 @@ type Gif = {
     name: string
     description?: string
     isPublic: boolean
-  }
+  } | null
 }
 
 export default function GifDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -194,24 +194,35 @@ export default function GifDetailPage({ params }: { params: Promise<{ id: string
 
             <div>
               <label className="block text-sm font-medium text-gray-600">Repository</label>
-              <Link 
-                href={`/dashboard/repositories/${gif.repository.id}`}
-                className="text-lg text-blue-600 hover:underline"
-              >
-                📁 {gif.repository.name}
-              </Link>
-              {gif.repository.description && (
-                <p className="text-sm text-gray-600 mt-1">{gif.repository.description}</p>
+              {gif.repository ? (
+                <>
+                  <Link 
+                    href={`/dashboard/repositories/${gif.repository.id}`}
+                    className="text-lg text-blue-600 hover:underline"
+                  >
+                    📁 {gif.repository.name}
+                  </Link>
+                  {gif.repository.description && (
+                    <p className="text-sm text-gray-600 mt-1">{gif.repository.description}</p>
+                  )}
+                  <div className="mt-2">
+                    <span className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded ${
+                      gif.repository.isPublic 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {gif.repository.isPublic ? '🌐 Public' : '🔒 Private'}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <div className="text-lg text-gray-500">
+                  📁 Orphaned GIF
+                  <p className="text-sm text-gray-400 mt-1">
+                    This GIF is not associated with any repository. Create a repository to organize it.
+                  </p>
+                </div>
               )}
-              <div className="mt-2">
-                <span className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded ${
-                  gif.repository.isPublic 
-                    ? 'bg-green-100 text-green-800' 
-                    : 'bg-gray-100 text-gray-800'
-                }`}>
-                  {gif.repository.isPublic ? '🌐 Public' : '🔒 Private'}
-                </span>
-              </div>
             </div>
 
             <div>

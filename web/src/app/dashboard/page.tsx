@@ -19,7 +19,7 @@ type RecentGif = {
   id: string
   filename: string
   originalName: string
-  repository: { id: string; name: string }
+  repository: { id: string; name: string } | null
   createdAt: string
 }
 type TrendingRepo = {
@@ -248,7 +248,9 @@ export default function DashboardPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="font-medium truncate">{gif.originalName}</div>
-                    <div className="text-sm text-gray-600 truncate">{gif.repository.name}</div>
+                    <div className="text-sm text-gray-600 truncate">
+                      {gif.repository ? gif.repository.name : 'Orphaned GIF'}
+                    </div>
                   </div>
                 </div>
               ))}

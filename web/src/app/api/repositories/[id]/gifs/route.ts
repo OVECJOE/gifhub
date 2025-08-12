@@ -28,7 +28,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
     include: { repository: true },
   })
   if (!existingGif) return NextResponse.json({ error: 'GIF not found' }, { status: 404 })
-  if (existingGif.repository.userId !== user.id)
+  if (existingGif.userId !== user.id)
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const duplicate = await prisma.gif.findFirst({
