@@ -1,8 +1,9 @@
 'use client'
+
+import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
 import { Button } from '@/components/ui/Button'
 import { GlassCard } from '@/components/ui/GlassCard'
 
@@ -21,6 +22,7 @@ export default function RepositoriesPage() {
   const { status } = useSession()
   const [repos, setRepos] = useState<Repository[]>([])
   const [loading, setLoading] = useState(true)
+  const router = useRouter()
 
   useEffect(() => {
     if (status === 'authenticated') {
@@ -76,7 +78,7 @@ export default function RepositoriesPage() {
   }
 
   if (status === 'unauthenticated') {
-    redirect('/login')
+    router.push('/login')
   }
 
   return (

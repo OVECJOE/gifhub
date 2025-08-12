@@ -1,7 +1,9 @@
 'use client'
+
+import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { useEffect, useMemo, useState } from 'react'
-import { redirect, notFound } from 'next/navigation'
+import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { Button, GlassCard, Modal } from '@/components/ui'
 import { ApiGif } from '@/types/gif'
@@ -36,6 +38,7 @@ export default function RepositoryDetailsPage({ params }: { params: Promise<{ id
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [myGifs, setMyGifs] = useState<Array<Repository['gifs'][number] & { repositoryId: string; repositoryName?: string }>>([])
   const [selecting, setSelecting] = useState<string | null>(null)
+  const router = useRouter()
 
   useEffect(() => {
     params.then(p => setId(p.id))
@@ -46,7 +49,7 @@ export default function RepositoryDetailsPage({ params }: { params: Promise<{ id
       fetchRepository()
       fetchMyRecentGifs()
     } else if (status === 'unauthenticated') {
-      redirect('/login')
+      router.push('/login')
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, id])
@@ -115,7 +118,7 @@ export default function RepositoryDetailsPage({ params }: { params: Promise<{ id
     try {
       const res = await fetch(`/api/repositories/${id}`, { method: 'DELETE' })
       if (res.ok) {
-        redirect('/dashboard/repositories')
+        router.push('/dashboard/repositories')
       }
     } catch (error) {
       console.error('Failed to delete repository:', error)

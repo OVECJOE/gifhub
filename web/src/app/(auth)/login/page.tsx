@@ -8,6 +8,7 @@ import { GlassCard } from '@/components/ui/GlassCard'
 import { signIn } from 'next-auth/react'
 import { Separator } from '@/components/ui/Separator'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 
 const Schema = z.object({ email: z.email(), password: z.string().min(1) })
 type FormValues = z.infer<typeof Schema>
@@ -15,12 +16,13 @@ type FormValues = z.infer<typeof Schema>
 export default function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const { register, handleSubmit, formState: { isSubmitting } } = useForm<FormValues>({ resolver: zodResolver(Schema) })
+  const router = useRouter()
 
   const onSubmit = async (values: FormValues) => {
     setError(null)
     const res = await signIn('credentials', { redirect: false, ...values })
     if (res?.error) setError('Invalid credentials')
-    if (res?.ok) window.location.href = '/dashboard'
+    if (res?.ok) router.push('/dashboard')
   }
 
   return (
@@ -46,5 +48,3 @@ export default function LoginPage() {
     </div>
   )
 }
-
-

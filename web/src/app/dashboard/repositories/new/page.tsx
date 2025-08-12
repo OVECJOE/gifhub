@@ -1,7 +1,8 @@
 'use client'
+
+import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { useState } from 'react'
-import { redirect, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/Button'
 import { GlassCard } from '@/components/ui/GlassCard'
@@ -15,7 +16,7 @@ export default function NewRepositoryPage() {
   const [creating, setCreating] = useState(false)
 
   if (status === 'unauthenticated') {
-    redirect('/login')
+    router.push('/login')
   }
 
   const createRepository = async (e: React.FormEvent) => {

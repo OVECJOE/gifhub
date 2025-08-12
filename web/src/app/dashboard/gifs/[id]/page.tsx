@@ -1,7 +1,9 @@
 'use client'
+
+import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { useEffect, useState } from 'react'
-import { redirect, notFound } from 'next/navigation'
+import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/Button'
 import { GlassCard } from '@/components/ui/GlassCard'
@@ -31,6 +33,7 @@ export default function GifDetailPage({ params }: { params: Promise<{ id: string
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState(false)
   const [id, setId] = useState<string>('')
+  const router = useRouter()
 
   useEffect(() => {
     params.then(p => setId(p.id))
@@ -40,7 +43,7 @@ export default function GifDetailPage({ params }: { params: Promise<{ id: string
     if (status === 'authenticated' && id) {
       fetchGif()
     } else if (status === 'unauthenticated') {
-      redirect('/login')
+      router.push('/login')
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, id])
@@ -68,7 +71,7 @@ export default function GifDetailPage({ params }: { params: Promise<{ id: string
     try {
       const res = await fetch(`/api/gifs/${id}`, { method: 'DELETE' })
       if (res.ok) {
-        redirect('/dashboard/gifs')
+        router.push('/dashboard/gifs')
       }
     } catch (error) {
       console.error('Failed to delete GIF:', error)

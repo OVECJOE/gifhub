@@ -39,7 +39,7 @@ export default function UploadPage() {
   // Load repositories lazily on first file selection
   const loadRepos = useCallback(async () => {
     if (repositories.length > 0) return // Already loaded
-    
+
     setLoadingRepos(true)
     try {
       const res = await fetch('/api/repositories')
@@ -51,7 +51,7 @@ export default function UploadPage() {
         }
       }
     } catch (error) {
-      console.error('Failed to load repositories:', error)
+      alert((error as Error).message || 'Failed to load repositories')
     } finally {
       setLoadingRepos(false)
     }
@@ -62,44 +62,40 @@ export default function UploadPage() {
     setBusy(true)
     setProgress(0)
     try {
-      const blob = await generateGif({ 
-        file, 
-        startTime: start, 
-        endTime: end, 
-        fps, 
-        quality, 
-        scale, 
-        onProgress: setProgress 
+      const blob = await generateGif({
+        file,
+        startTime: start,
+        endTime: end,
+        fps,
+        quality,
+        scale,
+        onProgress: setProgress
       })
       const url = URL.createObjectURL(blob)
       setPreview(url)
-      
-      // Save GIF immediately after generation
+
       await saveGifToCloud(blob)
     } catch (error) {
-      console.error('GIF generation failed:', error)
-      alert('Failed to generate GIF. Please try again.')
+      alert((error as Error).message || 'Failed to generate GIF. Please try again.')
     } finally {
       setBusy(false)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [end, file, fps, quality, scale, start])
 
   const saveGifToCloud = async (blob: Blob) => {
-    if (!repositories.length) return // Wait for repositories to load
-    
     setUploading(true)
     try {
       const form = new FormData()
       form.append('file', new File([blob], downloadName, { type: 'image/gif' }))
       form.append('repositoryId', repositories[0].id) // Use first repo as default
-      form.append('metadata', JSON.stringify({ 
-        originalName: file?.name || 'video', 
-        duration: end - start, 
-        width: videoMeta?.width || 0, 
-        height: videoMeta?.height || 0 
+      form.append('metadata', JSON.stringify({
+        originalName: file?.name || 'video',
+        duration: end - start,
+        width: videoMeta?.width || 0,
+        height: videoMeta?.height || 0
       }))
-      
+
       const res = await fetch('/api/gifs/upload', { method: 'POST', body: form })
       if (res.ok) {
         const data = await res.json()
@@ -117,7 +113,7 @@ export default function UploadPage() {
 
   const saveGif = async () => {
     if (!uploadedGifId || !repositoryId) return
-    
+
     setSaving(true)
     try {
       const res = await fetch(`/api/repositories/${repositoryId}/gifs`, {
@@ -125,7 +121,7 @@ export default function UploadPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ gifId: uploadedGifId })
       })
-      
+
       if (res.ok) {
         setSaved(true)
         setTimeout(() => setSaved(false), 3000)
@@ -140,8 +136,8 @@ export default function UploadPage() {
     }
   }
 
-  const downloadName = useMemo(() => 
-    file ? `${file.name.replace(/\.[^.]+$/, '')}-${Math.round((end-start)*1000)}ms.gif` : 'output.gif', 
+  const downloadName = useMemo(() =>
+    file ? `${file.name.replace(/\.[^.]+$/, '')}-${Math.round((end - start) * 1000)}ms.gif` : 'output.gif',
     [end, file, start]
   )
 
@@ -150,7 +146,7 @@ export default function UploadPage() {
     const duration = end - start
     const width = videoMeta.width
     const height = videoMeta.height
-    
+
     // Apply scale factor to dimensions
     let scaledWidth = width
     let scaledHeight = height
@@ -161,10 +157,10 @@ export default function UploadPage() {
         scaledHeight = Math.round((height * maxWidth) / width)
       }
     }
-    
+
     const totalFrames = duration * fps
     const pixels = scaledWidth * scaledHeight
-    
+
     // More accurate GIF size estimation based on real-world data
     // GIF compression varies significantly with content complexity and color count
     let bytesPerPixelPerFrame: number
@@ -178,28 +174,28 @@ export default function UploadPage() {
       // 256 colors - smaller but lower quality
       bytesPerPixelPerFrame = pixels > 500000 ? 0.08 : pixels > 200000 ? 0.15 : 0.25
     }
-    
+
     // Base size calculation
     let estimatedBytes = totalFrames * pixels * bytesPerPixelPerFrame
-    
+
     // Apply duration penalty (longer GIFs compress less efficiently)
     if (duration > 10) estimatedBytes *= 1.3
     else if (duration > 5) estimatedBytes *= 1.1
-    
+
     // Apply frame rate penalty (higher fps = less compression)
     if (fps === 24) estimatedBytes *= 1.2
     else if (fps === 15) estimatedBytes *= 1.05
-    
+
     // GIF header and metadata overhead
     estimatedBytes += 1024 + (totalFrames * 20)
-    
+
     // Add variance range (±30%)
     const minBytes = estimatedBytes * 0.7
     const maxBytes = estimatedBytes * 1.3
-    
-    const formatSize = (bytes: number) => 
+
+    const formatSize = (bytes: number) =>
       bytes > 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)}MB` : `${(bytes / 1024).toFixed(0)}KB`
-    
+
     return `${formatSize(minBytes)} - ${formatSize(maxBytes)}`
   }, [file, end, start, fps, quality, scale, videoMeta])
 
@@ -249,13 +245,13 @@ export default function UploadPage() {
       {/* Upload Section */}
       <GlassCard className="p-6">
         <h2 className="text-xl font-semibold mb-4">📹 Select Video</h2>
-        <VideoUploader 
-          onVideoSelect={(f) => { 
+        <VideoUploader
+          onVideoSelect={(f) => {
             setFile(f)
             setPreview(null)
             setSaved(false)
             loadRepos()
-          }} 
+          }}
         />
         {file && (
           <div className="mt-4 p-4 bg-white/50 border border-gray-200/50">
@@ -277,11 +273,11 @@ export default function UploadPage() {
       {file && (
         <GlassCard className="p-6">
           <h2 className="text-xl font-semibold mb-4">✂️ Select Timeline</h2>
-          <TimelineSelector 
-            videoFile={file} 
-            onTimeSelect={(s, e) => { setStart(s); setEnd(e) }} 
-            onMetadata={(d, w, h) => setVideoMeta({ duration: d, width: w, height: h })} 
-            maxGifDuration={videoMeta && videoMeta.duration > 300 ? 60 : 30} 
+          <TimelineSelector
+            videoFile={file}
+            onTimeSelect={(s, e) => { setStart(s); setEnd(e) }}
+            onMetadata={(d, w, h) => setVideoMeta({ duration: d, width: w, height: h })}
+            maxGifDuration={videoMeta && videoMeta.duration > 300 ? 60 : 30}
           />
           {end > start && (
             <div className="mt-4 p-4 bg-white/50 border border-gray-200/50">
@@ -311,9 +307,9 @@ export default function UploadPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
               <label className="block text-sm font-medium mb-2">Quality</label>
-              <select 
-                className="w-full border border-gray-300 px-4 py-3 bg-white/80 text-lg" 
-                value={quality} 
+              <select
+                className="w-full border border-gray-300 px-4 py-3 bg-white/80 text-lg"
+                value={quality}
                 onChange={(e) => setQuality(e.target.value as GifQuality)}
               >
                 <option value="high">🎯 High (64 colors)</option>
@@ -323,10 +319,10 @@ export default function UploadPage() {
             </div>
             <div>
               <label className="block text-sm font-medium mb-2">Frame Rate</label>
-              <select 
-                className="w-full border border-gray-300 px-4 py-3 bg-white/80 text-lg" 
-                value={fps} 
-                onChange={(e) => setFps(parseInt(e.target.value, 10) as 10|15|24)}
+              <select
+                className="w-full border border-gray-300 px-4 py-3 bg-white/80 text-lg"
+                value={fps}
+                onChange={(e) => setFps(parseInt(e.target.value, 10) as 10 | 15 | 24)}
               >
                 <option value={10}>🐌 10 fps (Smaller)</option>
                 <option value={15}>⚡ 15 fps (Balanced)</option>
@@ -335,9 +331,9 @@ export default function UploadPage() {
             </div>
             <div>
               <label className="block text-sm font-medium mb-2">Resolution</label>
-              <select 
-                className="w-full border border-gray-300 px-4 py-3 bg-white/80 text-lg" 
-                value={scale} 
+              <select
+                className="w-full border border-gray-300 px-4 py-3 bg-white/80 text-lg"
+                value={scale}
                 onChange={(e) => setScale(e.target.value as 'original' | '720' | '480' | '360')}
               >
                 <option value="original">📺 Original</option>
@@ -347,14 +343,14 @@ export default function UploadPage() {
               </select>
             </div>
           </div>
-          
+
           <div className="mt-6">
-            <Button 
-              onClick={onGenerate} 
+            <Button
+              onClick={onGenerate}
               disabled={busy}
               className="text-lg px-8 py-4"
             >
-              {busy ? `🔄 Generating... ${Math.round(progress*100)}%` : '🎨 Generate GIF'}
+              {busy ? `🔄 Generating... ${Math.round(progress * 100)}%` : '🎨 Generate GIF'}
             </Button>
           </div>
         </GlassCard>
@@ -364,21 +360,21 @@ export default function UploadPage() {
       {preview && (
         <GlassCard className="p-6">
           <h2 className="text-xl font-semibold mb-4">🎉 Your GIF is Ready!</h2>
-          
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Preview */}
             <div>
               <div className="bg-white/50 border border-gray-200/50 p-4 text-center">
-                <img 
-                  src={preview} 
-                  alt="GIF preview" 
-                  className="max-w-full h-auto mx-auto border border-gray-300" 
+                <img
+                  src={preview}
+                  alt="GIF preview"
+                  className="max-w-full h-auto mx-auto border border-gray-300"
                 />
               </div>
               <div className="mt-3 text-center">
-                <a 
-                  download={downloadName} 
-                  href={preview} 
+                <a
+                  download={downloadName}
+                  href={preview}
                   className="inline-flex items-center gap-2 text-blue-600 hover:underline"
                 >
                   💾 Download GIF
@@ -388,29 +384,31 @@ export default function UploadPage() {
 
             {/* Save Options */}
             <div>
-              {loadingRepos ? (
+              {uploading && (
                 <div className="text-center py-8">
-                  <div className="text-2xl mb-2">⏳</div>
-                  <p>Loading repositories...</p>
+                  <div className="text-2xl mb-2">📤</div>
+                  <p>Saving your GIF...</p>
                 </div>
-              ) : repositories.length > 0 ? (
-                <div className="space-y-4">
-                  {uploading ? (
+              )}
+
+              {uploadedGifId && (
+                <>
+                  <div className="p-4 bg-green-50 border border-green-200 text-green-800 text-center mb-4">
+                    ✅ GIF saved successfully!
+                  </div>
+
+                  {loadingRepos ? (
                     <div className="text-center py-8">
-                      <div className="text-2xl mb-2">📤</div>
-                      <p>Saving your GIF...</p>
+                      <div className="text-2xl mb-2">⏳</div>
+                      <p>Loading repositories...</p>
                     </div>
-                  ) : uploadedGifId ? (
+                  ) : repositories.length > 0 ? (
                     <>
-                      <div className="p-4 bg-green-50 border border-green-200 text-green-800 text-center mb-4">
-                        ✅ GIF saved successfully!
-                      </div>
-                      
                       <div>
                         <label className="block text-sm font-medium mb-2">Move to Repository</label>
-                        <select 
-                          className="w-full border border-gray-300 px-4 py-3 bg-white/80 text-lg" 
-                          value={repositoryId} 
+                        <select
+                          className="w-full border border-gray-300 px-4 py-3 bg-white/80 text-lg"
+                          value={repositoryId}
                           onChange={(e) => setRepositoryId(e.target.value)}
                         >
                           {repositories.map(r => (
@@ -418,13 +416,13 @@ export default function UploadPage() {
                           ))}
                         </select>
                       </div>
-                      
+
                       {saved ? (
                         <div className="p-4 bg-green-100 border border-green-300 text-green-800 text-center">
                           ✅ GIF moved to repository successfully!
                         </div>
                       ) : (
-                        <Button 
+                        <Button
                           onClick={saveGif}
                           disabled={saving || !repositoryId}
                           className="w-full text-lg py-4"
@@ -435,19 +433,18 @@ export default function UploadPage() {
                     </>
                   ) : (
                     <div className="text-center py-8">
-                      <div className="text-2xl mb-2">⏳</div>
-                      <p>GIF will be saved automatically after generation</p>
+                      <div className="text-2xl mb-2">💾</div>
+                      <p className="mb-2">GIF generated successfully!</p>
+                      <p className="text-sm text-gray-600 mb-4">
+                        You can download your GIF now. Create a repository to save it permanently.
+                      </p>
+                      <Link href="/dashboard/repositories">
+                        <Button>Create Repository</Button>
+                      </Link>
                     </div>
-                  )}
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <div className="text-4xl mb-4">📁</div>
-                  <p className="mb-4">No repositories found</p>
-                  <Link href="/dashboard/repositories">
-                    <Button>Create Repository</Button>
-                  </Link>
-                </div>
+                  )
+                  }
+                </>
               )}
             </div>
           </div>

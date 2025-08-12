@@ -1,7 +1,8 @@
 'use client'
+
+import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { useState, useEffect } from 'react'
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/Button'
 import { GlassCard } from '@/components/ui/GlassCard'
@@ -22,6 +23,7 @@ export default function ProfilePage() {
   const [saved, setSaved] = useState(false)
   const [stats, setStats] = useState<UserStats | null>(null)
   const [loadingStats, setLoadingStats] = useState(true)
+  const router = useRouter()
 
   useEffect(() => {
     if (session?.user?.name) {
@@ -84,7 +86,7 @@ export default function ProfilePage() {
   }
 
   if (status === 'unauthenticated') {
-    redirect('/login')
+    router.push('/login')
   }
 
   return (

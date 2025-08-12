@@ -1,8 +1,9 @@
 'use client'
+
+import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
 import { Button } from '@/components/ui/Button'
 import { GlassCard } from '@/components/ui/GlassCard'
 
@@ -32,7 +33,8 @@ type TrendingRepo = {
 
 export default function DashboardPage() {
   const { data: session, status } = useSession()
-  
+  const router = useRouter()
+
   // Independent loading states for each section
   const [repos, setRepos] = useState<Repository[]>([])
   const [recentGifs, setRecentGifs] = useState<RecentGif[]>([])
@@ -117,7 +119,7 @@ export default function DashboardPage() {
   }
 
   if (status === 'unauthenticated') {
-    redirect('/login')
+    router.push('/login')
   }
 
   const totalViews = repos.reduce((s, r) => s + (r.views || 0), 0)

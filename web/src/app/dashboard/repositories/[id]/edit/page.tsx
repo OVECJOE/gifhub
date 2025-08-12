@@ -1,7 +1,9 @@
 'use client'
+
+import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { useEffect, useState } from 'react'
-import { redirect, notFound } from 'next/navigation'
+import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/Button'
 import { GlassCard } from '@/components/ui/GlassCard'
@@ -26,6 +28,7 @@ export default function EditRepositoryPage({ params }: { params: Promise<{ id: s
   const [id, setId] = useState<string>('')
   const [availableTags, setAvailableTags] = useState<Tag[]>([])
   const [newTagName, setNewTagName] = useState('')
+  const router = useRouter()
 
   // Form state
   const [name, setName] = useState('')
@@ -42,7 +45,7 @@ export default function EditRepositoryPage({ params }: { params: Promise<{ id: s
       fetchRepository()
       fetchAvailableTags()
     } else if (status === 'unauthenticated') {
-      redirect('/login')
+      router.push('/login')
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, id])

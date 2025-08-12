@@ -1,7 +1,8 @@
 'use client'
+
+import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { useEffect, useState } from 'react'
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/Button'
 import { GlassCard } from '@/components/ui/GlassCard'
@@ -29,13 +30,15 @@ export default function DashboardGifsPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'name' | 'size'>('newest')
+  const router = useRouter()
 
   useEffect(() => {
     if (status === 'authenticated') {
       fetchGifs()
     } else if (status === 'unauthenticated') {
-      redirect('/login')
+      router.push('/login')
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status])
 
   const fetchGifs = async () => {
