@@ -86,27 +86,61 @@ export default function UploadPage() {
   const saveGifToCloud = async (blob: Blob) => {
     setUploading(true)
     try {
-      const form = new FormData()
-      form.append('file', new File([blob], downloadName, { type: 'image/gif' }))
-      if (repositories.length > 0) {
-        form.append('repositoryId', repositories[0].id)
+      // Step 1: Get presigned URL for direct upload to GCS
+      setProgress(0.1)
+      const presignedRes = await fetch('/api/gifs/presigned-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileName: downloadName,
+          contentType: 'image/gif',
+          repositoryId: repositories.length > 0 ? repositories[0].id : null
+        })
+      })
+
+      if (!presignedRes.ok) {
+        throw new Error('Failed to get upload URL')
       }
-      form.append('metadata', JSON.stringify({ 
-        originalName: file?.name || 'video', 
-        duration: end - start, 
-        width: videoMeta?.width || 0, 
-        height: videoMeta?.height || 0 
-      }))
-      
-      const res = await fetch('/api/gifs/upload', { method: 'POST', body: form })
-      if (res.ok) {
-        const data = await res.json()
+
+      const { signedUrl, filePath } = await presignedRes.json()
+      setProgress(0.2)
+
+      // Step 2: Upload directly to GCS using the presigned URL
+      const uploadRes = await fetch(signedUrl, {
+        method: 'PUT',
+        body: blob,
+        headers: { 'Content-Type': 'image/gif' }
+      })
+
+      if (!uploadRes.ok) {
+        throw new Error('Failed to upload to cloud storage')
+      }
+      setProgress(0.8)
+
+      // Step 3: Create GIF record in database
+      const createRes = await fetch('/api/gifs/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filePath,
+          originalName: file?.name || 'video',
+          fileSize: blob.size,
+          duration: end - start,
+          width: videoMeta?.width || 0,
+          height: videoMeta?.height || 0,
+          repositoryId: repositories.length > 0 ? repositories[0].id : null
+        })
+      })
+
+      if (createRes.ok) {
+        const data = await createRes.json()
         setUploadedGifId(data.gif.id)
         if (repositories.length > 0) {
           setRepositoryId(repositories[0].id)
         }
+        setProgress(1.0)
       } else {
-        throw new Error((await res.json()).error || 'Save failed')
+        throw new Error((await createRes.json()).error || 'Failed to create GIF record')
       }
     } catch (error) {
       alert((error as Error).message || 'Failed to save GIF. Please try again.')
@@ -394,6 +428,18 @@ export default function UploadPage() {
                 <div className="text-center py-8">
                   <div className="text-2xl mb-2">📤</div>
                   <p>Saving your GIF to the cloud...</p>
+                  <div className="mt-4 w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className="bg-black h-2 rounded-full transition-all duration-300" 
+                      style={{ width: `${Math.round(progress * 100)}%` }}
+                    ></div>
+                  </div>
+                  <p className="text-sm text-gray-600 mt-2">
+                    {progress < 0.2 ? 'Getting upload URL...' :
+                     progress < 0.8 ? 'Uploading to cloud storage...' :
+                     progress < 1.0 ? 'Creating database record...' :
+                     'Complete!'}
+                  </p>
                 </div>
               ) : uploadedGifId ? (
                 <div className="space-y-4">

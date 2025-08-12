@@ -176,6 +176,27 @@ export async function getSignedUrl(
   return url
 }
 
+export async function getSignedUploadUrl(
+  bucketName: string, 
+  fileName: string, 
+  contentType: string,
+  expiresInMinutes: number = 15
+): Promise<string> {
+  const storage = getGCSClient()
+  const bucket = storage.bucket(bucketName)
+  const file = bucket.file(fileName)
+
+  const options = {
+    version: 'v4' as const,
+    action: 'write' as const,
+    expires: Date.now() + expiresInMinutes * 60 * 1000,
+    contentType,
+  }
+
+  const [url] = await file.getSignedUrl(options)
+  return url
+}
+
 // Utility function to extract file path from GCS URL
 export function extractFilePathFromGCSUrl(url: string): string | null {
   const match = url.match(/https:\/\/storage\.googleapis\.com\/([^\/]+)\/(.+)/)
