@@ -24,6 +24,10 @@ export function TimelineSelector({ videoFile, onTimeSelect, onMetadata, maxGifDu
   const initialPressPosRef = useRef<{ x: number; time: number } | null>(null)
   const lastTapRef = useRef<{ x: number; time: number } | null>(null)
   const longPressTriggeredRef = useRef<boolean>(false)
+  
+  const [zoomLevel, setZoomLevel] = useState(1) // 1x = full timeline, higher = zoomed in
+  const [viewWindow, setViewWindow] = useState({ start: 0, end: 1 }) // 0-1 range of visible timeline
+  const [wheelZoomCenter, setWheelZoomCenter] = useState(0.5) // Center point for zoom operations
 
   useEffect(() => {
     const url = URL.createObjectURL(videoFile)
@@ -52,18 +56,33 @@ export function TimelineSelector({ videoFile, onTimeSelect, onMetadata, maxGifDu
     (time: number) => {
       if (!Number.isFinite(duration) || duration <= 0) return 0
       const clampedTime = Math.max(0, Math.min(time, duration))
-      return (clampedTime / duration) * 100
+      const normalizedTime = clampedTime / duration // 0-1 range
+      
+      // Map to visible window
+      const windowRange = viewWindow.end - viewWindow.start
+      if (normalizedTime < viewWindow.start || normalizedTime > viewWindow.end) {
+        return normalizedTime < viewWindow.start ? -10 : 110 // Off-screen
+      }
+      
+      const relativePosition = (normalizedTime - viewWindow.start) / windowRange
+      return relativePosition * 100
     },
-    [duration]
+    [duration, viewWindow]
   )
+  
   const percentToTime = useCallback(
     (percent: number) => {
       if (!Number.isFinite(duration) || duration <= 0) return 0
       if (!Number.isFinite(percent)) return 0
       const clampedPercent = Math.max(0, Math.min(percent, 100))
-      return (clampedPercent / 100) * duration
+      
+      // Map from visible window to actual time
+      const windowRange = viewWindow.end - viewWindow.start
+      const relativePosition = clampedPercent / 100
+      const normalizedTime = viewWindow.start + (relativePosition * windowRange)
+      return normalizedTime * duration
     },
-    [duration]
+    [duration, viewWindow]
   )
 
   const clampTime = useCallback(
@@ -262,6 +281,122 @@ export function TimelineSelector({ videoFile, onTimeSelect, onMetadata, maxGifDu
     }
   }, [maxGifDuration, duration])
 
+  // Enhanced zoom and navigation functions
+  const zoomIn = useCallback((centerPoint?: number) => {
+    // Use wheelZoomCenter if no centerPoint provided (for button clicks)
+    const effectiveCenterPoint = centerPoint ?? wheelZoomCenter
+    
+    const newZoomLevel = Math.min(zoomLevel * 2, 16) // Max 16x zoom
+    const zoomFactor = newZoomLevel / zoomLevel
+    
+    // Calculate new view window centered on effectiveCenterPoint
+    const windowRange = viewWindow.end - viewWindow.start
+    const newWindowRange = windowRange / zoomFactor
+    const centerTime = viewWindow.start + (windowRange * effectiveCenterPoint)
+    
+    const newStart = Math.max(0, centerTime - (newWindowRange * effectiveCenterPoint))
+    const newEnd = Math.min(1, newStart + newWindowRange)
+    
+    setZoomLevel(newZoomLevel)
+    setViewWindow({ start: newStart, end: newEnd })
+  }, [zoomLevel, viewWindow, wheelZoomCenter])
+
+  const zoomOut = useCallback(() => {
+    const newZoomLevel = Math.max(zoomLevel / 2, 1) // Min 1x zoom
+    if (newZoomLevel === 1) {
+      setViewWindow({ start: 0, end: 1 })
+    } else {
+      const zoomFactor = zoomLevel / newZoomLevel
+      const windowRange = viewWindow.end - viewWindow.start
+      const newWindowRange = Math.min(1, windowRange * zoomFactor)
+      
+      // Use wheelZoomCenter for more intuitive zoom out behavior
+      const centerTime = viewWindow.start + (windowRange * wheelZoomCenter)
+      
+      const newStart = Math.max(0, centerTime - (newWindowRange * wheelZoomCenter))
+      const newEnd = Math.min(1, newStart + newWindowRange)
+      
+      setViewWindow({ start: newStart, end: newEnd })
+    }
+    setZoomLevel(newZoomLevel)
+  }, [zoomLevel, viewWindow, wheelZoomCenter])
+
+  const panTimeline = useCallback((direction: 'left' | 'right') => {
+    if (zoomLevel <= 1) return // Can't pan when not zoomed
+    
+    const windowRange = viewWindow.end - viewWindow.start
+    const panAmount = windowRange * 0.25 * (direction === 'left' ? -1 : 1)
+    
+    let newStart = viewWindow.start + panAmount
+    let newEnd = viewWindow.end + panAmount
+    
+    // Keep within bounds
+    if (newStart < 0) {
+      newEnd = newEnd - newStart
+      newStart = 0
+    }
+    if (newEnd > 1) {
+      newStart = newStart - (newEnd - 1)
+      newEnd = 1
+    }
+    
+    setViewWindow({ start: Math.max(0, newStart), end: Math.min(1, newEnd) })
+  }, [zoomLevel, viewWindow])
+
+  const focusOnSelection = useCallback(() => {
+    if (!Number.isFinite(duration) || duration <= 0) return
+    
+    const startNorm = start / duration
+    const endNorm = end / duration
+    const selectionRange = endNorm - startNorm
+    
+    // Add padding around selection (20% on each side)
+    const padding = Math.min(0.2, selectionRange * 0.5)
+    const newStart = Math.max(0, startNorm - padding)
+    const newEnd = Math.min(1, endNorm + padding)
+    const newRange = newEnd - newStart
+    
+    // Set appropriate zoom level
+    const newZoomLevel = Math.min(16, Math.max(1, 1 / newRange))
+    
+    // Update wheelZoomCenter to center of selection for future zoom operations
+    const selectionCenter = (startNorm + endNorm) / 2
+    const windowCenter = (selectionCenter - newStart) / newRange
+    setWheelZoomCenter(Math.max(0, Math.min(1, windowCenter)))
+    
+    setZoomLevel(newZoomLevel)
+    setViewWindow({ start: newStart, end: newEnd })
+  }, [start, end, duration])
+
+  // Handle mouse wheel for zooming
+  useEffect(() => {
+    const timeline = timelineRef.current
+    if (!timeline) return
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      
+      const rect = timeline.getBoundingClientRect()
+      const centerPoint = (e.clientX - rect.left) / rect.width
+      
+      // Update wheelZoomCenter state for smooth zoom experience
+      setWheelZoomCenter(centerPoint)
+      
+      if (e.deltaY < 0) {
+        zoomIn(centerPoint)
+      } else {
+        zoomOut()
+      }
+    }
+
+    // Add event listener with passive: false to allow preventDefault
+    timeline.addEventListener('wheel', handleWheel, { passive: false })
+    
+    return () => {
+      timeline.removeEventListener('wheel', handleWheel)
+    }
+  }, [zoomIn, zoomOut])
+
   return (
     <div className="space-y-6">
       {/* Video Player */}
@@ -288,9 +423,9 @@ export function TimelineSelector({ videoFile, onTimeSelect, onMetadata, maxGifDu
 
       {/* Enhanced Timeline */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <h3 className="text-lg font-medium">Timeline Selection</h3>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <button
               onClick={playSelection}
               className={`px-3 py-1 text-white transition-colors text-sm ${
@@ -305,8 +440,64 @@ export function TimelineSelector({ videoFile, onTimeSelect, onMetadata, maxGifDu
             >
               🔄 Reset
             </button>
+            <button
+              onClick={focusOnSelection}
+              className="px-3 py-1 border border-gray-300 text-black hover:border-gray-500 transition-colors text-sm"
+              disabled={end <= start}
+            >
+              🎯 Focus Selection
+            </button>
           </div>
         </div>
+
+        {/* Zoom and Navigation Controls */}
+        {duration > 60 && (
+          <div className="bg-gray-50 p-3 border border-gray-200">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">Zoom:</span>
+                <button
+                  onClick={() => zoomOut()}
+                  className="px-2 py-1 bg-gray-200 hover:bg-gray-300 text-sm"
+                  disabled={zoomLevel <= 1}
+                >
+                  🔍−
+                </button>
+                <span className="text-sm min-w-12 text-center">{zoomLevel.toFixed(1)}x</span>
+                <button
+                  onClick={() => zoomIn()}
+                  className="px-2 py-1 bg-gray-200 hover:bg-gray-300 text-sm"
+                  disabled={zoomLevel >= 16}
+                >
+                  🔍+
+                </button>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">Navigate:</span>
+                <button
+                  onClick={() => panTimeline('left')}
+                  className="px-2 py-1 bg-gray-200 hover:bg-gray-300 text-sm"
+                  disabled={zoomLevel <= 1}
+                >
+                  ◀
+                </button>
+                <button
+                  onClick={() => panTimeline('right')}
+                  className="px-2 py-1 bg-gray-200 hover:bg-gray-300 text-sm"
+                  disabled={zoomLevel <= 1}
+                >
+                  ▶
+                </button>
+              </div>
+
+              <div className="text-xs text-gray-600">
+                Viewing: {(viewWindow.start * duration).toFixed(1)}s - {(viewWindow.end * duration).toFixed(1)}s
+                {zoomLevel > 1 && ' • Scroll to zoom • Drag to pan'}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Visual Timeline */}
         <div className="relative">
@@ -391,7 +582,7 @@ export function TimelineSelector({ videoFile, onTimeSelect, onMetadata, maxGifDu
               }`}
               style={{
                 left: `${timeToPercent(start)}%`,
-                width: `${timeToPercent(end - start)}%`,
+                width: `${Math.max(0, timeToPercent(end) - timeToPercent(start))}%`,
               }}
               onPointerDown={(e) => {
                 e.preventDefault()
@@ -444,20 +635,53 @@ export function TimelineSelector({ videoFile, onTimeSelect, onMetadata, maxGifDu
               <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-white text-xs">⟩</div>
             </div>
 
-            {/* Time markers */}
+            {/* Enhanced Time markers */}
             <div className="absolute bottom-0 left-0 right-0 h-4 pointer-events-none">
-              {Array.from({ length: Math.min(11, Math.ceil(duration) + 1) }, (_, i) => {
-                const time = (duration / 10) * i
-                return (
-                  <div
-                    key={i}
-                    className="absolute bottom-0 text-xs text-gray-600 transform -translate-x-1/2"
-                    style={{ left: `${(i / 10) * 100}%` }}
-                  >
-                    {time.toFixed(0)}s
-                  </div>
-                )
-              })}
+              {(() => {
+                const visibleDuration = (viewWindow.end - viewWindow.start) * duration
+                const visibleStart = viewWindow.start * duration
+                const visibleEnd = viewWindow.end * duration
+                
+                // Determine appropriate time interval based on visible duration
+                let interval: number
+                if (visibleDuration <= 10) interval = 1
+                else if (visibleDuration <= 30) interval = 5
+                else if (visibleDuration <= 120) interval = 10
+                else if (visibleDuration <= 600) interval = 30
+                else if (visibleDuration <= 1800) interval = 60
+                else if (visibleDuration <= 3600) interval = 300
+                else interval = 600
+                
+                const markers = []
+                const startMark = Math.ceil(visibleStart / interval) * interval
+                const endMark = Math.floor(visibleEnd / interval) * interval
+                
+                for (let time = startMark; time <= endMark; time += interval) {
+                  const normalizedTime = time / duration
+                  if (normalizedTime >= viewWindow.start && normalizedTime <= viewWindow.end) {
+                    const percent = ((normalizedTime - viewWindow.start) / (viewWindow.end - viewWindow.start)) * 100
+                    
+                    const formatTime = (seconds: number) => {
+                      if (seconds < 60) return `${seconds}s`
+                      const mins = Math.floor(seconds / 60)
+                      const secs = seconds % 60
+                      return secs === 0 ? `${mins}m` : `${mins}m${secs}s`
+                    }
+                    
+                    markers.push(
+                      <div
+                        key={time}
+                        className="absolute bottom-0 text-xs text-gray-600 transform -translate-x-1/2"
+                        style={{ left: `${percent}%` }}
+                      >
+                        {formatTime(time)}
+                      </div>
+                    )
+                  }
+                }
+                
+                return markers
+              })()}
             </div>
           </div>
         </div>
@@ -537,6 +761,13 @@ export function TimelineSelector({ videoFile, onTimeSelect, onMetadata, maxGifDu
             <li>• <strong>Double&nbsp;tap</strong> the timeline to grab and <strong>drag</strong> the whole selection</li>
             <li>• <strong>Drag handles</strong> (⟨ ⟩) to adjust start/end times precisely</li>
             <li>• <strong>Preview Selection</strong> plays only your selected portion</li>
+            {duration > 60 && (
+              <>
+                <li>• <strong>Mouse wheel</strong> over timeline to zoom in/out</li>
+                <li>• <strong>Focus Selection</strong> button zooms to your selected area</li>
+                <li>• <strong>Pan buttons</strong> (◀ ▶) navigate when zoomed in</li>
+              </>
+            )}
             <li>• <strong>Visual feedback</strong>: Gray = paused, Black = playing; selection darkens when active</li>
           </ul>
         </div>

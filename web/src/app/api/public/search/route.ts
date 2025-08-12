@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getSignedUrl, getGCSBucketName, extractFilePathFromGCSUrl } from '@/lib/gcs'
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
-  const q = (searchParams.get('q') || '').trim()
-  const tag = (searchParams.get('tag') || '').trim()
+  const q = searchParams.get('q') || ''
+  const tag = searchParams.get('tag') || ''
 
   const where: {
     isPublic: true
@@ -21,8 +22,56 @@ export async function GET(req: Request) {
     where.tags = { some: { name: { equals: tag, mode: 'insensitive' } } }
   }
 
-  const repos = await prisma.repository.findMany({ where, include: { tags: true, gifs: true }, take: 50 })
-  return NextResponse.json({ repositories: repos })
+  try {
+    const repos = await prisma.repository.findMany({ 
+      where, 
+      include: { tags: true, gifs: true }, 
+      take: 50 
+    })
+
+    const bucketName = getGCSBucketName()
+    const reposWithSignedUrls = await Promise.all(
+      repos.map(async (repo) => {
+        const gifsWithSignedUrls = await Promise.all(
+          repo.gifs.map(async (gif) => {
+            let filePath: string
+            if (gif.filename.startsWith('https://storage.googleapis.com/')) {
+              const extracted = extractFilePathFromGCSUrl(gif.filename)
+              if (!extracted) {
+                console.warn(`Invalid file path for GIF ${gif.id}: ${gif.filename}`)
+                return gif
+              }
+              filePath = extracted
+            } else {
+              filePath = gif.filename
+            }
+
+            try {
+              const signedUrl = await getSignedUrl(bucketName, filePath, 60)
+              return {
+                ...gif,
+                filename: signedUrl
+              }
+            } catch (error) {
+              console.error(`Failed to generate signed URL for GIF ${gif.id}:`, error)
+              return gif
+            }
+          })
+        )
+
+        return {
+          ...repo,
+          gifs: gifsWithSignedUrls
+        }
+      })
+    )
+
+    return NextResponse.json({ repositories: reposWithSignedUrls })
+  } catch (error) {
+    return NextResponse.json({ 
+      error: error instanceof Error ? error.message : 'Failed to search repositories' 
+    }, { status: 500 })
+  }
 }
 
 

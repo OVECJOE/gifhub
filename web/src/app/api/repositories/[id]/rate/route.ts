@@ -1,20 +1,40 @@
 import { NextResponse } from 'next/server'
-import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
+import { uploadToGCS, getGCSBucketName, getGCSClient } from '@/lib/gcs'
 
 type RatingsData = { [repoId: string]: { total: number; count: number } }
 
-async function readRatings() {
-  const supabase = getSupabaseAdmin()
-  const { data } = await supabase.storage.from('meta').download('ratings.json')
-  if (!data) return {} as RatingsData
-  const text = await data.text()
-  try { return JSON.parse(text) as RatingsData } catch { return {} as RatingsData }
+async function readRatings(): Promise<RatingsData> {
+  try {
+    const storage = getGCSClient()
+    const bucketName = getGCSBucketName()
+    const file = storage.bucket(bucketName).file('meta/ratings.json')
+    
+    const [exists] = await file.exists()
+    if (!exists) return {}
+    
+    const [data] = await file.download()
+    const text = data.toString('utf-8')
+    return JSON.parse(text) as RatingsData
+  } catch (error) {
+    console.warn('Failed to read ratings:', error)
+    return {}
+  }
 }
 
-async function writeRatings(payload: RatingsData) {
-  const supabase = getSupabaseAdmin()
-  const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' })
-  await supabase.storage.from('meta').upload('ratings.json', await blob.arrayBuffer(), { contentType: 'application/json', upsert: true })
+async function writeRatings(payload: RatingsData): Promise<void> {
+  const bucketName = getGCSBucketName()
+  const jsonData = JSON.stringify(payload, null, 2)
+  
+  await uploadToGCS({
+    bucketName,
+    fileName: 'meta/ratings.json',
+    buffer: Buffer.from(jsonData, 'utf-8'),
+    contentType: 'application/json',
+    metadata: {
+      updatedAt: new Date().toISOString(),
+      type: 'ratings',
+    },
+  })
 }
 
 export async function POST(req: Request, context: { params: Promise<{ id: string }> }) {

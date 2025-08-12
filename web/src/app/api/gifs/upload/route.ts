@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
-import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
+import { uploadToGCS, getGCSBucketName } from '@/lib/gcs'
 
 export async function POST(req: Request) {
   const session = await auth()
@@ -16,30 +16,42 @@ export async function POST(req: Request) {
   if (!file || !repositoryId || !metadataRaw) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
   const metadata = JSON.parse(metadataRaw) as { originalName: string; duration: number; width: number; height: number }
 
-  const arrayBuffer = await file.arrayBuffer()
-  const filePath = `${user.id}/${repositoryId}/${Date.now()}-${file.name}`
+  try {
+    const arrayBuffer = await file.arrayBuffer()
+    const filePath = `gifs/${user.id}/${repositoryId}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`
+    const bucketName = getGCSBucketName()
 
-  const supabase = getSupabaseAdmin()
-  const { error } = await supabase.storage.from('gifs').upload(filePath, Buffer.from(arrayBuffer), {
-    contentType: 'image/gif',
-  })
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    await uploadToGCS({
+      bucketName,
+      fileName: filePath,
+      buffer: Buffer.from(arrayBuffer),
+      contentType: 'image/gif',
+      metadata: {
+        userId: user.id,
+        repositoryId,
+        originalName: metadata.originalName,
+        uploadedAt: new Date().toISOString(),
+      },
+    })
 
-  const { data: publicUrlData } = supabase.storage.from('gifs').getPublicUrl(filePath)
+    const gif = await prisma.gif.create({
+      data: {
+        filename: filePath,
+        originalName: metadata.originalName,
+        fileSize: file.size,
+        duration: metadata.duration,
+        width: metadata.width,
+        height: metadata.height,
+        repositoryId,
+      },
+    })
 
-  const gif = await prisma.gif.create({
-    data: {
-      filename: publicUrlData.publicUrl,
-      originalName: metadata.originalName,
-      fileSize: file.size,
-      duration: metadata.duration,
-      width: metadata.width,
-      height: metadata.height,
-      repositoryId,
-    },
-  })
-
-  return NextResponse.json({ gif }, { status: 201 })
+    return NextResponse.json({ gif }, { status: 201 })
+  } catch (error) {
+    return NextResponse.json({ 
+      error: error instanceof Error ? error.message : 'Upload failed' 
+    }, { status: 500 })
+  }
 }
 
 

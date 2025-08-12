@@ -1,42 +1,76 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
+import { getSignedUrl, getGCSBucketName, extractFilePathFromGCSUrl } from '@/lib/gcs'
 
 export async function GET(req: Request) {
+  const session = await auth()
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const user = await prisma.user.findUnique({ where: { email: session.user.email } })
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   const { searchParams } = new URL(req.url)
   const recent = searchParams.get('recent')
-  
-  if (recent) {
-    // Get recent GIFs for authenticated user
-    const session = await auth()
-    if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    
-    let userId = (session.user as { id?: string }).id
-    if (!userId && session.user.email) {
-      const user = await prisma.user.findUnique({ where: { email: session.user.email } })
-      userId = user?.id
-    }
-    
-    if (!userId) return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    
-    const limit = parseInt(recent) || 5
+  const limit = recent ? parseInt(recent) : 50
+  try {
     const gifs = await prisma.gif.findMany({
       where: {
         repository: {
-          userId
+          userId: user.id
         }
       },
       include: {
         repository: {
-          select: { id: true, name: true }
+          select: {
+            id: true,
+            name: true
+          }
         }
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: {
+        createdAt: 'desc'
+      },
       take: limit
     })
-    
-    return NextResponse.json({ gifs })
+
+    const bucketName = getGCSBucketName()
+    const gifsWithSignedUrls = await Promise.all(
+      gifs.map(async (gif) => {
+        let filePath: string
+
+        if (gif.filename.startsWith('https://storage.googleapis.com/')) {
+          const extracted = extractFilePathFromGCSUrl(gif.filename)
+          if (!extracted) {
+            console.warn(`Invalid file path for GIF ${gif.id}: ${gif.filename}`)
+            return gif
+          }
+          filePath = extracted
+        } else {
+          filePath = gif.filename
+        }
+
+        try {
+          const signedUrl = await getSignedUrl(bucketName, filePath, 60)
+          return {
+            ...gif,
+            filename: signedUrl
+          }
+        } catch (error) {
+          console.error(`Failed to generate signed URL for GIF ${gif.id}:`, error)
+          return gif
+        }
+      })
+    )
+
+    return NextResponse.json({ gifs: gifsWithSignedUrls })
+  } catch (error) {
+    return NextResponse.json({ 
+      error: error instanceof Error ? error.message : 'Failed to fetch GIFs' 
+    }, { status: 500 })
   }
-  
-  return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
 }

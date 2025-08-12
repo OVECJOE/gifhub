@@ -1,18 +1,19 @@
 'use client'
 import { useSession } from 'next-auth/react'
 import { useCallback, useMemo, useState } from 'react'
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { VideoUploader } from '@/components/video/VideoUploader'
 import { TimelineSelector } from '@/components/video/TimelineSelector'
 import { Button } from '@/components/ui/Button'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { generateGif, type GifQuality } from '@/lib/ffmpeg'
+import { useRouter } from 'next/navigation'
 
 type Repository = { id: string; name: string }
 
 export default function UploadPage() {
   const { status } = useSession()
+  const router = useRouter()
   const [file, setFile] = useState<File | null>(null)
   const [start, setStart] = useState(0)
   const [end, setEnd] = useState(0)
@@ -32,7 +33,7 @@ export default function UploadPage() {
   const [uploadedGifId, setUploadedGifId] = useState<string | null>(null)
 
   if (status === 'unauthenticated') {
-    redirect('/login')
+    router.push('/login')
   }
 
   // Load repositories lazily on first file selection
@@ -73,8 +74,8 @@ export default function UploadPage() {
       const url = URL.createObjectURL(blob)
       setPreview(url)
       
-      // Upload to Supabase immediately after generation
-      await uploadGifToSupabase(blob)
+      // Save GIF immediately after generation
+      await saveGifToCloud(blob)
     } catch (error) {
       console.error('GIF generation failed:', error)
       alert('Failed to generate GIF. Please try again.')
@@ -84,7 +85,7 @@ export default function UploadPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [end, file, fps, quality, scale, start])
 
-  const uploadGifToSupabase = async (blob: Blob) => {
+  const saveGifToCloud = async (blob: Blob) => {
     if (!repositories.length) return // Wait for repositories to load
     
     setUploading(true)
@@ -105,11 +106,10 @@ export default function UploadPage() {
         setUploadedGifId(data.gif.id)
         setRepositoryId(repositories[0].id)
       } else {
-        throw new Error('Upload failed')
+        throw new Error((await res.json()).error || 'Save failed')
       }
     } catch (error) {
-      console.error('Failed to upload GIF:', error)
-      alert('Failed to upload GIF. Please try again.')
+      alert((error as Error).message || 'Failed to save GIF. Please try again.')
     } finally {
       setUploading(false)
     }
@@ -120,7 +120,6 @@ export default function UploadPage() {
     
     setSaving(true)
     try {
-      // Move the GIF to the selected repository
       const res = await fetch(`/api/repositories/${repositoryId}/gifs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -129,14 +128,13 @@ export default function UploadPage() {
       
       if (res.ok) {
         setSaved(true)
-        setTimeout(() => setSaved(false), 3000) // Hide success message after 3s
-        redirect('/dashboard/gifs')
+        setTimeout(() => setSaved(false), 3000)
+        router.push('/dashboard/gifs')
       } else {
-        throw new Error('Failed to associate GIF with repository')
+        throw new Error((await res.json()).error || 'Failed to associate GIF with repository')
       }
     } catch (error) {
-      console.error('Failed to save GIF:', error)
-      alert('Failed to save GIF. Please try again.')
+      alert((error as Error).message || 'Failed to save GIF. Please try again.')
     } finally {
       setSaving(false)
     }
@@ -148,16 +146,62 @@ export default function UploadPage() {
   )
 
   const estimatedSize = useMemo(() => {
-    if (!file || end <= start) return null
+    if (!file || end <= start || !videoMeta) return null
     const duration = end - start
-    const pixels = (videoMeta?.width || 720) * (videoMeta?.height || 480)
-    const frames = duration * fps
-    const bytesPerFrame = pixels * (quality === 'high' ? 0.8 : quality === 'medium' ? 0.6 : 0.4)
-    const totalBytes = frames * bytesPerFrame
-    return totalBytes > 1024 * 1024 
-      ? `~${(totalBytes / (1024 * 1024)).toFixed(1)}MB`
-      : `~${(totalBytes / 1024).toFixed(0)}KB`
-  }, [file, end, start, fps, quality, videoMeta])
+    const width = videoMeta.width
+    const height = videoMeta.height
+    
+    // Apply scale factor to dimensions
+    let scaledWidth = width
+    let scaledHeight = height
+    if (scale !== 'original') {
+      const maxWidth = scale === '720' ? 1280 : scale === '480' ? 854 : 640
+      if (width > maxWidth) {
+        scaledWidth = maxWidth
+        scaledHeight = Math.round((height * maxWidth) / width)
+      }
+    }
+    
+    const totalFrames = duration * fps
+    const pixels = scaledWidth * scaledHeight
+    
+    // More accurate GIF size estimation based on real-world data
+    // GIF compression varies significantly with content complexity and color count
+    let bytesPerPixelPerFrame: number
+    if (quality === 'high') {
+      // 64 colors - better quality but larger
+      bytesPerPixelPerFrame = pixels > 500000 ? 0.15 : pixels > 200000 ? 0.25 : 0.4
+    } else if (quality === 'medium') {
+      // 128 colors - balanced
+      bytesPerPixelPerFrame = pixels > 500000 ? 0.12 : pixels > 200000 ? 0.2 : 0.3
+    } else {
+      // 256 colors - smaller but lower quality
+      bytesPerPixelPerFrame = pixels > 500000 ? 0.08 : pixels > 200000 ? 0.15 : 0.25
+    }
+    
+    // Base size calculation
+    let estimatedBytes = totalFrames * pixels * bytesPerPixelPerFrame
+    
+    // Apply duration penalty (longer GIFs compress less efficiently)
+    if (duration > 10) estimatedBytes *= 1.3
+    else if (duration > 5) estimatedBytes *= 1.1
+    
+    // Apply frame rate penalty (higher fps = less compression)
+    if (fps === 24) estimatedBytes *= 1.2
+    else if (fps === 15) estimatedBytes *= 1.05
+    
+    // GIF header and metadata overhead
+    estimatedBytes += 1024 + (totalFrames * 20)
+    
+    // Add variance range (±30%)
+    const minBytes = estimatedBytes * 0.7
+    const maxBytes = estimatedBytes * 1.3
+    
+    const formatSize = (bytes: number) => 
+      bytes > 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)}MB` : `${(bytes / 1024).toFixed(0)}KB`
+    
+    return `${formatSize(minBytes)} - ${formatSize(maxBytes)}`
+  }, [file, end, start, fps, quality, scale, videoMeta])
 
   if (status === 'loading') {
     return (
@@ -218,7 +262,7 @@ export default function UploadPage() {
             <div className="flex items-center gap-3">
               <div className="text-2xl">🎬</div>
               <div>
-                <div className="font-medium">{file.name}</div>
+                <div className="font-medium truncate max-w-[80%]">{file.name}</div>
                 <div className="text-sm text-gray-600">
                   {(file.size / (1024 * 1024)).toFixed(1)}MB
                   {videoMeta && ` • ${videoMeta.width}×${videoMeta.height} • ${videoMeta.duration.toFixed(1)}s`}
@@ -237,7 +281,7 @@ export default function UploadPage() {
             videoFile={file} 
             onTimeSelect={(s, e) => { setStart(s); setEnd(e) }} 
             onMetadata={(d, w, h) => setVideoMeta({ duration: d, width: w, height: h })} 
-            maxGifDuration={30} 
+            maxGifDuration={videoMeta && videoMeta.duration > 300 ? 60 : 30} 
           />
           {end > start && (
             <div className="mt-4 p-4 bg-white/50 border border-gray-200/50">
@@ -354,12 +398,12 @@ export default function UploadPage() {
                   {uploading ? (
                     <div className="text-center py-8">
                       <div className="text-2xl mb-2">📤</div>
-                      <p>Uploading GIF to Supabase...</p>
+                      <p>Saving your GIF...</p>
                     </div>
                   ) : uploadedGifId ? (
                     <>
                       <div className="p-4 bg-green-50 border border-green-200 text-green-800 text-center mb-4">
-                        ✅ GIF uploaded successfully!
+                        ✅ GIF saved successfully!
                       </div>
                       
                       <div>
@@ -392,7 +436,7 @@ export default function UploadPage() {
                   ) : (
                     <div className="text-center py-8">
                       <div className="text-2xl mb-2">⏳</div>
-                      <p>GIF will be uploaded automatically after generation</p>
+                      <p>GIF will be saved automatically after generation</p>
                     </div>
                   )}
                 </div>

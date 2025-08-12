@@ -31,13 +31,11 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
   if (existingGif.repository.userId !== user.id)
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  // Prevent duplicate by same filename in the target repository
   const duplicate = await prisma.gif.findFirst({
     where: { repositoryId: targetRepositoryId, filename: existingGif.filename },
   })
   if (duplicate) return NextResponse.json({ gif: duplicate }, { status: 200 })
 
-  // Copy metadata (do not move); reuse the same file URL
   const newGif = await prisma.gif.create({
     data: {
       filename: existingGif.filename,
