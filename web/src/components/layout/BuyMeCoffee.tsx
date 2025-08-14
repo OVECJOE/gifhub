@@ -1,19 +1,23 @@
-import Script from 'next/script'
+import Link from 'next/link'
+import { Button } from '@/components/ui/Button'
 
 export function BuyMeCoffee() {
   return (
-    <Script
-      src="https://cdnjs.buymeacoffee.com/1.0.0/widget.prod.min.js"
-      data-name="BMC-Widget"
-      data-cfasync="false"
-      data-id="misterlyserious"
-      data-description="Support me on Buy me a coffee!"
-      data-message="Hello, please buy me a coffee to support my work and encourage me to develop new solutions. It will make my heart glad and will inspire my hands to craft masterfully and creatively to produce more tools that make people's lives easier."
-      data-color="#FF813F"
-      data-position="Right"
-      data-x_margin="18"
-      data-y_margin="18"
-      strategy="lazyOnload"
-    />
+    <div className="fixed bottom-4 right-6 z-50">
+      <Link 
+        href="https://www.buymeacoffee.com/misterlyserious" 
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        <Button 
+          className="shadow-lg shadow-gray-500/50 hover:shadow-gray-500/70 transition-all duration-300 hover:scale-105"
+          pVal='px-3 py-2'
+          title="Support this project - Buy me a coffee"
+          aria-label="Buy me a coffee"
+        >
+          ☕
+        </Button>
+      </Link>
+    </div>
   )
 }
