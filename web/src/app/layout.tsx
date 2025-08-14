@@ -4,6 +4,7 @@ import "./globals.css";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import AuthSessionProvider from "@/components/providers/SessionProvider";
+import { BuyMeCoffee } from "@/components/ui/BuyMeCoffee";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,6 +33,7 @@ export default function RootLayout({
           <Header />
           <main className="container mx-auto px-6 py-8 min-h-[calc(100vh-13rem)]">{children}</main>
           <Footer />
+          <BuyMeCoffee username="misterlyserious" />
         </AuthSessionProvider>
       </body>
     </html>
