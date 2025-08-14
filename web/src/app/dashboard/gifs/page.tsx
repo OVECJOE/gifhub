@@ -7,6 +7,8 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/Button'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { downloadFile, formatFileSize, formatDuration } from '@/lib/utils'
+import toast from 'react-hot-toast'
+import { ConfirmModal } from '@/components/ui/ConfirmModal'
 
 type Gif = {
   id: string
@@ -30,6 +32,7 @@ export default function DashboardGifsPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'name' | 'size'>('newest')
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<false | string>(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -49,23 +52,24 @@ export default function DashboardGifsPage() {
         setGifs(data.gifs || [])
       }
     } catch (error) {
-      console.error('Failed to fetch GIFs:', error)
+      toast.error((error as Error).message || 'Failed to fetch GIFs')
     } finally {
       setLoading(false)
     }
   }
 
   const deleteGif = async (gifId: string) => {
-    if (!confirm('Are you sure you want to delete this GIF? This action cannot be undone.')) return
-
     try {
       const res = await fetch(`/api/gifs/${gifId}`, { method: 'DELETE' })
       if (res.ok) {
         setGifs(prev => prev.filter(gif => gif.id !== gifId))
+        toast.success('GIF deleted successfully')
+      } else {
+        const errorData = await res.json().catch(() => ({ error: 'Unknown error' }))
+        toast.error(errorData.error || `Failed to delete GIF (${res.status})`)
       }
     } catch (error) {
-      console.error('Failed to delete GIF:', error)
-      alert('Failed to delete GIF. Please try again.')
+      toast.error((error as Error).message || 'Failed to delete GIF. Please try again.')
     }
   }
 
@@ -226,7 +230,7 @@ export default function DashboardGifsPage() {
                   <Button 
                     variant="secondary" 
                     className="text-sm py-2"
-                    onClick={() => deleteGif(gif.id)}
+                    onClick={() => setShowDeleteConfirm(gif.id)}
                   >
                     🗑️
                   </Button>
@@ -262,6 +266,16 @@ export default function DashboardGifsPage() {
           )}
         </GlassCard>
       )}
+
+      <ConfirmModal
+        isOpen={!!showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={() => deleteGif(showDeleteConfirm as string)}
+        title="Delete GIF"
+        message="Are you sure you want to delete this GIF? This action cannot be undone."
+        confirmText="Delete"
+        variant="danger"
+      />
     </div>
   )
 }

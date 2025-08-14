@@ -8,6 +8,8 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/Button'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { downloadFile, formatFileSize, formatDuration } from '@/lib/utils'
+import toast from 'react-hot-toast'
+import { ConfirmModal } from '@/components/ui/ConfirmModal'
 
 type Gif = {
   id: string
@@ -33,6 +35,7 @@ export default function GifDetailPage({ params }: { params: Promise<{ id: string
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState(false)
   const [id, setId] = useState<string>('')
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -64,18 +67,19 @@ export default function GifDetailPage({ params }: { params: Promise<{ id: string
     }
   }
 
-  const deleteGif = async () => {
-    if (!confirm('Are you sure you want to delete this GIF? This action cannot be undone.')) return
-
+  const handleDeleteGif = async () => {
     setDeleting(true)
     try {
       const res = await fetch(`/api/gifs/${id}`, { method: 'DELETE' })
       if (res.ok) {
+        toast.success('GIF deleted successfully')
         router.push('/dashboard/gifs')
+      } else {
+        throw new Error('Failed to delete GIF')
       }
     } catch (error) {
       console.error('Failed to delete GIF:', error)
-      alert('Failed to delete GIF. Please try again.')
+      toast.error('Failed to delete GIF. Please try again.')
     } finally {
       setDeleting(false)
     }
@@ -155,7 +159,7 @@ export default function GifDetailPage({ params }: { params: Promise<{ id: string
               variant="secondary"
               onClick={() => {
                 navigator.clipboard.writeText(gif.filename)
-                alert('GIF URL copied to clipboard!')
+                toast.success('GIF URL copied to clipboard!')
               }}
             >
               📋 Copy URL
@@ -254,13 +258,23 @@ export default function GifDetailPage({ params }: { params: Promise<{ id: string
           <Button 
             variant="secondary"
             className="hover:bg-red-100 hover:text-red-600"
-            onClick={deleteGif}
+            onClick={() => setShowDeleteConfirm(true)}
             disabled={deleting}
           >
             {deleting ? '🗑️ Deleting...' : '🗑️ Delete GIF'}
           </Button>
         </div>
       </GlassCard>
+
+      <ConfirmModal
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDeleteGif}
+        title="Delete GIF"
+        message="Are you sure you want to delete this GIF? This action cannot be undone."
+        confirmText="Delete"
+        variant="danger"
+      />
     </div>
   )
 }

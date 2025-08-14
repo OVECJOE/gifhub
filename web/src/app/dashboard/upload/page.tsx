@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { generateGif, type GifQuality } from '@/lib/ffmpeg'
 import { useRouter } from 'next/navigation'
+import toast from 'react-hot-toast'
 
 type Repository = { id: string; name: string }
 
@@ -51,7 +52,7 @@ export default function UploadPage() {
         }
       }
     } catch (error) {
-      alert((error as Error).message || 'Failed to load repositories')
+      toast.error((error as Error).message || 'Failed to load repositories')
     } finally {
       setLoadingRepos(false)
     }
@@ -76,7 +77,7 @@ export default function UploadPage() {
 
       await saveGifToCloud(blob)
     } catch (error) {
-      alert((error as Error).message || 'Failed to generate GIF. Please try again.')
+      toast.error((error as Error).message || 'Failed to generate GIF. Please try again.')
     } finally {
       setBusy(false)
     }
@@ -143,7 +144,7 @@ export default function UploadPage() {
         throw new Error((await createRes.json()).error || 'Failed to create GIF record')
       }
     } catch (error) {
-      alert((error as Error).message || 'Failed to save GIF. Please try again.')
+      toast.error((error as Error).message || 'Failed to save GIF. Please try again.')
     } finally {
       setUploading(false)
     }
@@ -170,7 +171,7 @@ export default function UploadPage() {
         throw new Error((await res.json()).error || 'Failed to associate GIF with repository')
       }
     } catch (error) {
-      alert((error as Error).message || 'Failed to save GIF. Please try again.')
+      toast.error((error as Error).message || 'Failed to save GIF. Please try again.')
     } finally {
       setSaving(false)
     }

@@ -7,6 +7,8 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { Button, GlassCard, Modal } from '@/components/ui'
 import { ApiGif } from '@/types/gif'
+import toast from 'react-hot-toast'
+import { ConfirmModal } from '@/components/ui/ConfirmModal'
 
 type Repository = {
   id: string
@@ -38,6 +40,8 @@ export default function RepositoryDetailsPage({ params }: { params: Promise<{ id
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [myGifs, setMyGifs] = useState<Array<Repository['gifs'][number] & { repositoryId: string; repositoryName?: string }>>([])
   const [selecting, setSelecting] = useState<string | null>(null)
+  const [showDeleteGifConfirm, setShowDeleteGifConfirm] = useState<false | string>(false)
+  const [showDeleteRepoConfirm, setShowDeleteRepoConfirm] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -95,9 +99,7 @@ export default function RepositoryDetailsPage({ params }: { params: Promise<{ id
     }
   }
 
-  const deleteGif = async (gifId: string) => {
-    if (!confirm('Are you sure you want to delete this GIF?')) return
-
+  const handleDeleteGif = async (gifId: string) => {
     try {
       const res = await fetch(`/api/gifs/${gifId}`, { method: 'DELETE' })
       if (res.ok) {
@@ -105,23 +107,30 @@ export default function RepositoryDetailsPage({ params }: { params: Promise<{ id
           ...prev,
           gifs: prev.gifs.filter(gif => gif.id !== gifId)
         } : null)
+        toast.success('GIF deleted successfully')
+      } else {
+        const errorData = await res.json().catch(() => ({ error: 'Unknown error' }))
+        toast.error(errorData.error || `Failed to delete GIF (${res.status})`)
       }
     } catch (error) {
-      console.error('Failed to delete GIF:', error)
+      toast.error((error as Error).message || 'Failed to delete GIF. Please try again.')
     }
   }
 
-  const deleteRepository = async () => {
-    if (!confirm('Are you sure you want to delete this repository? This will delete all GIFs in it. This action cannot be undone.')) return
-
+  const handleDeleteRepository = async () => {
     setDeleting(true)
     try {
       const res = await fetch(`/api/repositories/${id}`, { method: 'DELETE' })
       if (res.ok) {
+        toast.success('Repository deleted successfully')
         router.push('/dashboard/repositories')
+      } else {
+        const errorData = await res.json().catch(() => ({ error: 'Unknown error' }))
+        toast.error(errorData.error || `Failed to delete repository (${res.status})`)
       }
     } catch (error) {
-      console.error('Failed to delete repository:', error)
+      toast.error((error as Error).message || 'Failed to delete repository. Please try again.')
+    } finally {
       setDeleting(false)
     }
   }
@@ -225,7 +234,7 @@ export default function RepositoryDetailsPage({ params }: { params: Promise<{ id
           <Button 
             variant="secondary" 
             className="text-sm px-4 py-2 hover:bg-red-100 hover:text-red-600 w-full md:w-auto"
-            onClick={deleteRepository}
+            onClick={() => setShowDeleteRepoConfirm(true)}
             disabled={deleting}
           >
             {deleting ? '🗑️ Deleting...' : '🗑️ Delete'}
@@ -330,7 +339,7 @@ export default function RepositoryDetailsPage({ params }: { params: Promise<{ id
                     <Button 
                       variant="secondary" 
                       className="text-xs py-2 px-3 hover:bg-red-100 hover:text-red-600"
-                      onClick={() => deleteGif(gif.id)}
+                      onClick={() => setShowDeleteGifConfirm(gif.id)}
                     >
                       🗑️
                     </Button>
@@ -396,6 +405,26 @@ export default function RepositoryDetailsPage({ params }: { params: Promise<{ id
           </div>
         )}
       </Modal>
+
+      <ConfirmModal
+        isOpen={!!showDeleteGifConfirm}
+        onClose={() => setShowDeleteGifConfirm(false)}
+        onConfirm={() => handleDeleteGif(showDeleteGifConfirm as string)}
+        title="Delete GIF"
+        message="Are you sure you want to delete this GIF?"
+        confirmText="Delete"
+        variant="danger"
+      />
+
+      <ConfirmModal
+        isOpen={showDeleteRepoConfirm}
+        onClose={() => setShowDeleteRepoConfirm(false)}
+        onConfirm={handleDeleteRepository}
+        title="Delete Repository"
+        message="Are you sure you want to delete this repository? This will delete all GIFs in it. This action cannot be undone."
+        confirmText="Delete"
+        variant="danger"
+      />
     </div>
   )
 }

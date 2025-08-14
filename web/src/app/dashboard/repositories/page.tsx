@@ -6,6 +6,8 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/Button'
 import { GlassCard } from '@/components/ui/GlassCard'
+import toast from 'react-hot-toast'
+import { ConfirmModal } from '@/components/ui/ConfirmModal'
 
 type Repository = {
   id: string
@@ -22,6 +24,7 @@ export default function RepositoriesPage() {
   const { status } = useSession()
   const [repos, setRepos] = useState<Repository[]>([])
   const [loading, setLoading] = useState(true)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<false | string>(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -48,16 +51,18 @@ export default function RepositoriesPage() {
 
 
 
-  const deleteRepository = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this repository? This action cannot be undone.')) return
-
+  const handleDeleteRepository = async (id: string) => {
     try {
       const res = await fetch(`/api/repositories/${id}`, { method: 'DELETE' })
       if (res.ok) {
         setRepos(prev => prev.filter(repo => repo.id !== id))
+        toast.success('Repository deleted successfully')
+      } else {
+        const errorData = await res.json().catch(() => ({ error: 'Unknown error' }))
+        toast.error(errorData.error || `Failed to delete repository (${res.status})`)
       }
     } catch (error) {
-      console.error('Failed to delete repository:', error)
+      toast.error((error as Error).message || 'Failed to delete repository. Please try again.')
     }
   }
 
@@ -183,7 +188,7 @@ export default function RepositoriesPage() {
                   <Button 
                     variant="secondary" 
                     className="text-xs px-2 py-1 hover:bg-red-100 hover:text-red-600"
-                    onClick={() => deleteRepository(repo.id)}
+                    onClick={() => setShowDeleteConfirm(repo.id)}
                   >
                     🗑️
                   </Button>
@@ -233,6 +238,16 @@ export default function RepositoriesPage() {
           </Link>
         </GlassCard>
       )}
+
+      <ConfirmModal
+        isOpen={!!showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={() => handleDeleteRepository(showDeleteConfirm as string)}
+        title="Delete Repository"
+        message="Are you sure you want to delete this repository? This action cannot be undone."
+        confirmText="Delete"
+        variant="danger"
+      />
     </div>
   )
 }

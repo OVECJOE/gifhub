@@ -5,6 +5,7 @@ import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import AuthSessionProvider from "@/components/providers/SessionProvider";
 import { BuyMeCoffee } from "@/components/layout/BuyMeCoffee";
+import { Toaster } from "react-hot-toast";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -28,12 +29,25 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen bg-gradient-to-br from-white/90 to-white/80 backdrop-blur-sm text-black`}>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen bg-gradient-to-br from-white/90 to-white/80 text-black`}>
         <AuthSessionProvider>
           <Header />
           <main className="container mx-auto px-6 py-8 min-h-[calc(100vh-13rem)]">{children}</main>
           <Footer />
           <BuyMeCoffee />
+          <Toaster 
+            position="top-right"
+            toastOptions={{
+              duration: 4000,
+              style: {
+                background: 'rgba(255, 255, 255, 0.9)',
+                backdropFilter: 'blur(8px)',
+                border: '1px solid rgba(0, 0, 0, 0.1)',
+                borderRadius: '0px',
+                color: '#000',
+              },
+            }}
+          />
         </AuthSessionProvider>
       </body>
     </html>

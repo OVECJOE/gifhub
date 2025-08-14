@@ -2,6 +2,7 @@
 
 import { Button } from './Button'
 import { downloadFile } from '@/lib/utils'
+import toast from 'react-hot-toast'
 
 interface DownloadButtonProps {
   filename: string
@@ -15,8 +16,9 @@ export function DownloadButton({ filename, gifId, variant = 'secondary', classNa
   const handleDownload = async () => {
     try {
       await downloadFile(filename, `${gifId}.gif`)
+      toast.success('GIF downloaded successfully!')
     } catch (error) {
-      alert(`Download failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      toast.error((error as Error).message || 'Download failed. Please try again.')
     }
   }
 

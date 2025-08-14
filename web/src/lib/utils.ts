@@ -15,8 +15,7 @@ export async function downloadFile(url: string, filename: string) {
     
     window.URL.revokeObjectURL(downloadUrl)
   } catch (error) {
-    console.error('Download failed:', error)
-    alert('Download failed. Please try again.')
+    throw new Error((error as Error).message || 'Download failed. Please try again.')
   }
 }
 
