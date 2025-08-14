@@ -44,7 +44,7 @@ export function Header() {
             className="text-xl sm:text-2xl lg:text-3xl font-bold text-black"
             onClick={() => setIsMenuOpen(false)}
           >
-            GifHub
+            GIFHub
           </Link>
 
           {/* Desktop Navigation */}

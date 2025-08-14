@@ -1,9 +1,10 @@
 import { notFound } from 'next/navigation'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { Button } from '@/components/ui/Button'
+import { DownloadButton } from '@/components/ui/DownloadButton'
 
 async function getRepo(id: string) {
-  const res = await fetch(`/api/public/repositories/${id}`, { cache: 'no-store' })
+  const res = await fetch(`${process.env.NEXTAUTH_URL || ''}/api/public/repositories/${id}`, { cache: 'no-store' })
   if (!res.ok) return null
   return (await res.json()).repository as { 
     id: string
@@ -26,7 +27,7 @@ async function getRepo(id: string) {
 }
 
 async function incrementView(id: string) {
-  await fetch(`/api/repositories/${id}/view`, { method: 'POST' })
+  await fetch(`${process.env.NEXTAUTH_URL || ''}/api/repositories/${id}/view`, { method: 'POST' })
 }
 
 async function urlIsReachable(url: string): Promise<boolean> {
@@ -60,7 +61,7 @@ export default async function PublicRepositoryPage({ params }: { params: Promise
   async function rate(formData: FormData) {
     'use server'
     const rating = Number(formData.get('rating') || 0)
-    await fetch(`/api/repositories/${id}/rate`, { 
+    await fetch(`${process.env.NEXTAUTH_URL || ''}/api/repositories/${id}/rate`, { 
       method: 'POST', 
       headers: { 'Content-Type': 'application/json' }, 
       body: JSON.stringify({ rating }) 
@@ -145,17 +146,13 @@ export default async function PublicRepositoryPage({ params }: { params: Promise
                     <div>📥 {gif.downloads}</div>
                   </div>
                   <div className="flex gap-2 pt-2">
-                    <Button 
-                      variant="secondary" 
+                    <DownloadButton 
+                      filename={gif.filename}
+                      gifId={gif.id}
                       className="w-full text-sm py-2"
-                      onClick={async () => {
-                        'use client'
-                        const { downloadFile } = await import('@/lib/utils')
-                        await downloadFile(gif.filename, `${gif.id}.gif`)
-                      }}
                     >
                       💾 Download
-                    </Button>
+                    </DownloadButton>
                   </div>
                 </div>
               </GlassCard>
